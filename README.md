@@ -145,7 +145,7 @@ fib2(40) = 165580141
 true.
 ```
 
-Support Julia's `'Package'.function` calls. The `'Package'` is quoted as an
+Support Julia's `'Package'.function` calls. The `'Package'` is quoted as a
 Prolog atom, otherwise uppercase words are treated as Prolog variables.
 
 ``` prolog

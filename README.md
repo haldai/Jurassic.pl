@@ -53,6 +53,38 @@ true.
 f([1, 2, 3, 4, 5]) = [1 2 3 4 5; 2 4 6 8 10; 3 6 9 12 15; 4 8 12 16 20; 5 10 15 20 25]
 true.
 ```
+Array reference with `[]`:
+
+``` prolog
+?- a := f([1,2,3,4,5]).
+true.
+
+?- X = 2, := @show(a[1,X]).
+a[1, 2] = 2
+X = 2.
+
+?- X = 100, := @show(a[1,X]).
+BoundsError: attempt to access 5×5 Array{Int64,2} at index [1, 100]
+false.
+```
+
+Julia constants:
+
+``` prolog
+% Jurassic.pl
+?- X := 1/0.
+X = inf.
+
+?- X := -1/0.
+X = ninf.
+
+% Prolog
+?- X is 1/0.
+ERROR: Arithmetic: evaluation error: `zero_divisor'
+ERROR: In:
+ERROR:   [10] _6834 is 1/0
+ERROR:    [9] <user>
+```
 
 Define complicated functions with string:
 

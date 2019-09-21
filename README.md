@@ -118,7 +118,7 @@ fib2(46) = 2971215073
 true.
 ```
 
-Similar program in Prolog takes much more time:
+Similar program in Prolog (**without tabling for memorising**) takes much more time:
 
 ``` prolog
 fib_pl(N, 1) :-
@@ -128,7 +128,7 @@ fib_pl(N, X) :-
     N2 is N-2, fib_pl(N2, X2),
     X is X1 + X2.
 
-% Prolog
+% Prolog without tabling
 ?- time(fib_pl(40, X)).
 % 827,900,701 inferences, 55.618 CPU in 55.691 seconds (100% CPU, 14885532 Lips)
 X = 165580141.

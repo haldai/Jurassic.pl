@@ -66,7 +66,7 @@ fib(46) = 2971215073
 true.
 ```
 
-Or faster:
+Multiple lines also work:
 
 ``` prolog
 ?- := "function fib2(n)

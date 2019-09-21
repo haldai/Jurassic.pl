@@ -38,7 +38,7 @@ Hello World!
 true.
 
 ?- a := sqrt(2.0),
-|    := println(a).
+     := println(a).
 1.4142135623730951
 true.
 ```
@@ -102,19 +102,46 @@ Multiple lines also work:
 
 ``` prolog
 ?- := "function fib2(n)
-|        n <= 1 && return 1
-|        sum = 0
-|        while n > 1
-|            sum += fib2(n-1)
-|            n -= 2
-|        end
-|        return sum + 1
-|    end".
+         n <= 1 && return 1
+         sum = 0
+         while n > 1
+             sum += fib2(n-1)
+             n -= 2
+         end
+         return sum + 1
+     end".
 true.
 
 ?- := @time(@show(fib2(46))).
 fib2(46) = 2971215073
   4.409316 seconds (60.55 k allocations: 3.183 MiB)
+true.
+```
+
+Similar program in Prolog takes much more time:
+
+``` prolog
+fib_pl(N, 1) :-
+    N =< 1, !.
+fib_pl(N, X) :-
+    N1 is N-1, fib_pl(N1, X1),
+    N2 is N-2, fib_pl(N2, X2),
+    X is X1 + X2.
+
+% Prolog
+?- time(fib_pl(40, X)).
+% 827,900,701 inferences, 55.618 CPU in 55.691 seconds (100% CPU, 14885532 Lips)
+X = 165580141.
+
+% Julia in Jurassic
+?- := @time(@show(fib(40))).
+fib(40) = 165580141
+  0.525090 seconds (3.97 k allocations: 228.626 KiB)
+true.
+
+?- := @time(@show(fib2(40))).
+fib2(40) = 165580141
+  0.296593 seconds (6.86 k allocations: 392.581 KiB)
 true.
 ```
 
@@ -128,16 +155,15 @@ true.
 X = 7.10736074293304.
 
 % Prolog and Julia work together
-?- between(1,10,X), 
-   := println(f(X)).
-3.0
-X = 1 ;
-7.10736074293304
-X = 2 ;
-12.830663096236986
-X = 3 ;
-20.38629436111989
-X = 4 ;
+?- between(1,10,X),
+   Y := f(X).
+X = 1,
+Y = 3.0 ;
+X = 2,
+Y = 7.10736074293304 ;
+X = 3,
+Y = 12.830663096236986 ;
+...
 ...
 ```
 

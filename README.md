@@ -145,6 +145,23 @@ fib2(40) = 165580141
 true.
 ```
 
+Support Julia's `'Package'.function` calls. The `'Package'` is quoted as an
+Prolog atom, otherwise uppercase words are treated as Prolog variables.
+
+``` prolog
+?- jl_using("Pkg").
+true.
+
+?- := 'Pkg'.status().
+    Status `~/.julia/environments/v1.2/Project.toml`
+  [336ed68f] CSV v0.5.12
+  [159f3aea] Cairo v0.6.0
+  [324d7699] CategoricalArrays v0.6.0
+  ...
+true.
+
+```
+
 Unify Prolog term with Julia expressions:
 
 ``` prolog

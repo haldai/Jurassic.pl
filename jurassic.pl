@@ -37,16 +37,16 @@
 %%
 %%	Translate Atom1.Atom2 and Atom.Compound   into 'Atom1.Atom2' and
 %%	'Atom1.Name'(Args).
-        expand_dotted_name(TermIn, TermOut) :-
-            compound(TermIn), !,
-            (   join_dot(TermIn, Out)
-            ->  TermOut = Out
-            ;   contains_dot(TermIn)
-            ->  compound_name_arguments(TermIn, Name, ArgsIn),
-                maplist(expand_dotted_name, ArgsIn, ArgsOut),
-                compound_name_arguments(TermOut, Name, ArgsOut)
-            ;   TermOut = TermIn
-            ).
+expand_dotted_name(TermIn, TermOut) :-
+    compound(TermIn), !,
+    (   join_dot(TermIn, Out)
+    ->  TermOut = Out
+    ;   contains_dot(TermIn)
+    ->  compound_name_arguments(TermIn, Name, ArgsIn),
+        maplist(expand_dotted_name, ArgsIn, ArgsOut),
+        compound_name_arguments(TermOut, Name, ArgsOut)
+    ;   TermOut = TermIn
+    ).
 expand_dotted_name(Term, Term).
 
 join_dot(In, Out) :-

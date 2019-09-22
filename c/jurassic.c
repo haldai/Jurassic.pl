@@ -10,6 +10,10 @@ static functor_t FUNCTOR_at1; /* macro */
 static functor_t FUNCTOR_colon1; /* for julia variable (and symbols) */
 static functor_t FUNCTOR_tuple1; /* use tuple/1 to represent julia tuple */
 static functor_t FUNCTOR_equal2; /* assignment */
+static functor_t FUNCTOR_plusequal2; /* += */
+static functor_t FUNCTOR_minusqual2; /* -= */
+static functor_t FUNCTOR_timesequal2; /* *= */
+static functor_t FUNCTOR_dividesequal2; /* /= */
 static atom_t ATOM_true;
 static atom_t ATOM_false;
 static atom_t ATOM_nan;
@@ -248,7 +252,8 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
 static jl_sym_t *jl_fname(const char *fname) {
   char *dot = strchr(fname, '.');
   jl_expr_t *ex;
-  if (dot == NULL)
+  if (dot == NULL ||
+      strlen(fname) == 2) /* fname is ".+", ".*" ... */
     return jl_symbol(fname);
   else {
     /* if fname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
@@ -388,7 +393,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       return ex;
     } else {
       /* initialise an expression */
-      if (strcmp(fname, "=") == 0 || strcmp(fname, "call") == 0) {
+      if (strchr(fname, '=') != NULL || strstr(fname, "call") != NULL) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
@@ -822,6 +827,10 @@ install_t install_jurassic(void) {
   FUNCTOR_colon1 = PL_new_functor(PL_new_atom(":"), 1);
   FUNCTOR_tuple1 = PL_new_functor(PL_new_atom("tuple"), 1);
   FUNCTOR_equal2 = PL_new_functor(PL_new_atom("="), 2);
+  FUNCTOR_plusequal2 = PL_new_functor(PL_new_atom("+="), 2);
+  FUNCTOR_minusqual2 = PL_new_functor(PL_new_atom("-="), 2);
+  FUNCTOR_timesequal2 = PL_new_functor(PL_new_atom("*="), 2);
+  FUNCTOR_dividesequal2 = PL_new_functor(PL_new_atom("/="), 2);
 
   /* Registration */
   PL_register_foreign("jl_eval_str", 2, jl_eval_str, 0);

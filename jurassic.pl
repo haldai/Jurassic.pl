@@ -9,10 +9,15 @@
                      ':='/2,
                      op(950, fx, :=),
                      op(950, yfx, :=),
+                     op(700, yfx, (+=)),
+                     op(700, yfx, (-=)),
+                     op(700, yfx, (*=)),
+                     op(700, yfx, (/=)),
                      op(500, xfy, .+),
                      op(500, xfy, .-),                     
                      op(400, xfy, .*),
                      op(400, xfy, ./),
+                     op(200, xfy, .^),
                      op(100, fx, @),
                      op(100, yf, [])
                     ]).
@@ -25,7 +30,7 @@
     jl_send_command(X).
 /* Binary */
 ':='(Y, X) :-
-    atom(Y), !,
+    ground(Y), !,
     := Y = X.
 ':='(Y, X) :-
     string(X), !,

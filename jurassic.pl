@@ -18,8 +18,9 @@
                      op(400, xfy, .*),
                      op(400, xfy, ./),
                      op(200, xfy, .^),
-                     op(100, fx, @),
-                     op(100, yf, [])
+                     op(200, fx, @),
+                     op(200, fx, :),
+                     op(200, yf, [])
                     ]).
 
 /* Unary */
@@ -116,5 +117,39 @@ contains_at(Term) :-
 user:goal_expansion(In, Out) :-
 	contains_at(In), !,
 	expand_macro_name(In, Out).
+
+expand_symb_name(TermIn, TermOut) :-
+    compound(TermIn), !,
+    (   join_colon(TermIn, Out)
+    ->  TermOut = Out
+    ;   contains_at(TermIn)
+    ->  compound_name_arguments(TermIn, Name, ArgsIn),
+        maplist(expand_symb_name, ArgsIn, ArgsOut),
+        compound_name_arguments(TermOut, Name, ArgsOut)
+    ;   TermOut = TermIn
+    ).
+expand_symb_name(Term, Term).
+
+join_colon(In, Out) :-
+	compound_name_arguments(In, ':', [A]),
+    (   compound(A)
+    ->  compound_name_arguments(A, Name, Args),  
+        atomic_list_concat([':', Name], Name2),
+        compound_name_arguments(Out, Name2, Args)
+    ;   Out = In
+    ).
+
+contains_colon(Term) :-
+	compound(Term),
+	(   compound_name_arity(Term, ':', 1)
+	->  true
+	;   arg(_, Term, Arg),
+	    contains_at(Arg)
+	->  true
+	).
+
+user:goal_expansion(In, Out) :-
+	contains_colon(In), !,
+	expand_symb_name(In, Out).
 
 :- load_foreign_library("lib/jurassic.so").

@@ -153,71 +153,71 @@ int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
     *ret = NULL;
     return JURASSIC_FAIL;
   }
-  /* if the atom is julia keywords*/
-  if (atom == ATOM_true) {
+  JL_TRY {
+    /* if the atom is julia keywords*/
+    if (atom == ATOM_true) {
 #ifdef JURASSIC_DEBUG
-    printf("boolean: true.\n");
+      printf("boolean: true.\n");
 #endif
-    *ret = jl_true;
-  } else if (atom == ATOM_false) {
+      *ret = jl_true;
+    } else if (atom == ATOM_false) {
 #ifdef JURASSIC_DEBUG
-    printf("boolean: false.\n");
+      printf("boolean: false.\n");
 #endif
-    *ret = jl_false;
-  } else if (atom == ATOM_nothing) {
+      *ret = jl_false;
+    } else if (atom == ATOM_nothing) {
 #ifdef JURASSIC_DEBUG
-    printf("Nothing.\n");
-    jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-    jl_printf(JL_STDOUT, "\n");
+      printf("Nothing.\n");
+      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(JL_STDOUT, "\n");
 #endif
-    *ret = jl_nothing;
-  } else if (atom == ATOM_missing) {
+      *ret = jl_nothing;
+    } else if (atom == ATOM_missing) {
 #ifdef JURASSIC_DEBUG
-    printf("Missing.\n");
-    jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-    jl_printf(JL_STDOUT, "\n");
+      printf("Missing.\n");
+      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(JL_STDOUT, "\n");
 #endif
-    *ret = jl_eval_string("missing");
-  }  else if (atom == ATOM_nan) {
+      *ret = jl_eval_string("missing");
+    }  else if (atom == ATOM_nan) {
 #ifdef JURASSIC_DEBUG
-    printf("NaN.\n");
-    jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-    jl_printf(JL_STDOUT, "\n");
+      printf("NaN.\n");
+      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(JL_STDOUT, "\n");
 #endif
-    *ret = jl_box_float64(D_PNAN);
-  } else if (atom == ATOM_inf) {
+      *ret = jl_box_float64(D_PNAN);
+    } else if (atom == ATOM_inf) {
 #ifdef JURASSIC_DEBUG
-    printf("Inf.\n");
-    jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-    jl_printf(JL_STDOUT, "\n");
+      printf("Inf.\n");
+      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(JL_STDOUT, "\n");
 #endif
-    *ret = jl_box_float64(D_PINF);
-  } else if (atom == ATOM_ninf) {
+      *ret = jl_box_float64(D_PINF);
+    } else if (atom == ATOM_ninf) {
 #ifdef JURASSIC_DEBUG
-    printf("negative Inf.\n");
-    jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-    jl_printf(JL_STDOUT, "\n");
+      printf("negative Inf.\n");
+      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(JL_STDOUT, "\n");
 #endif
-    *ret = jl_box_float64(D_NINF);
-  } else if (jl_is_defined(a) && !flag_sym) {
-    /* get the variable assignment according to name */
+      *ret = jl_box_float64(D_NINF);
+    } else if (jl_is_defined(a) && !flag_sym) {
+      /* get the variable assignment according to name */
 #ifdef JURASSIC_DEBUG
-    printf("defined Julia variable.\n");
-    jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-    jl_printf(JL_STDOUT, "\n");
+      printf("defined Julia variable.\n");
+      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(JL_STDOUT, "\n");
 #endif
-    return jl_access_var(a, ret);
-  } else { /* default as Symbol */
+      return jl_access_var(a, ret);
+    } else { /* default as Symbol */
 #ifdef JURASSIC_DEBUG
-    printf("Fallback to Symbol.\n");
+      printf("Fallback to Symbol.\n");
 #endif
-    *ret = (jl_value_t *)jl_symbol(a);
-  }
-  if (jl_exception_occurred()) {
-    jl_call2(jl_get_function(jl_base_module, "showerror"),
-             jl_stderr_obj(),
-             jl_exception_occurred());
-    jl_printf(jl_stderr_stream(), "\n");
+      *ret = (jl_value_t *)jl_symbol(a);
+    }
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    *ret = NULL;
     return JURASSIC_FAIL;
   }
   return JURASSIC_SUCCESS;
@@ -315,6 +315,15 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
   if (fname == NULL || strlen(fname) == 0) {
     printf("[ERR] Read functor name failed!\n");
     return NULL;
+  } else if (fname[0] == ':') {
+    char *sym_str;
+    if (!PL_get_chars(expr, &sym_str,
+                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+      return NULL;
+#ifdef JURASSIC_DEBUG
+    printf("        Symbol (QuoteNode): %s.\n", sym_str);
+#endif
+    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(++sym_str));
   } else if (fname[0] == '@') {
     /* macro calls */
 #ifdef JURASSIC_DEBUG
@@ -388,12 +397,14 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       printf("[DEBUG] 0-argument function: %s().\n", fname);
 #endif
       jl_expr_t *ex = jl_exprn(jl_symbol("call"), 1);
-      /* FIXME: "XX.xx" has to be processed as Expr(XX, :(xx))*/
+      /* "XX.xx" has to be processed as Expr(XX, :(xx))*/
       jl_exprargset(ex, 0, jl_fname(fname));
       return ex;
     } else {
-      /* initialise an expression */
-      if (strchr(fname, '=') != NULL || strstr(fname, "call") != NULL) {
+      /* initialise an expression without using :call */
+      if ( strchr(fname, '=') != NULL ||
+           strstr(fname, "call") != NULL ||
+           strcmp(fname, "kw") == 0 ) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
@@ -644,7 +655,7 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
   return JURASSIC_SUCCESS;
 }
 
-/* TODO: unify julia term with prolog term */
+/* Unify julia term with prolog term */
 int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
   printf("[Debug] Julia value:\n");
@@ -856,7 +867,7 @@ install_t install_jurassic(void) {
   checked_send_command_str("println(\"Done.\")");
 }
 
-/* TODO: Allow returning value and unifying with Prolog variable */
+/* Allow returning value and unifying with Prolog variable */
 foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
   jl_value_t * ret;
   JL_TRY {

@@ -29,6 +29,7 @@ Load `jurassic` module in SWI-Prolog:
 
 ```
 
+## Julia Expressions
 Run Julia expression in Prolog with symbol `:=`:
 
 ``` prolog
@@ -43,6 +44,7 @@ true.
 true.
 ```
 
+## Julia Functions
 Define a function and call a Julia macro:
 
 ``` prolog
@@ -66,24 +68,6 @@ X = 2.
 ?- X = 100, := @show(a[1,X]).
 BoundsError: attempt to access 5×5 Array{Int64,2} at index [1, 100]
 false.
-```
-
-Julia constants:
-
-``` prolog
-% Jurassic.pl
-?- X := 1/0.
-X = inf.
-
-?- X := -1/0.
-X = ninf.
-
-% Prolog
-?- X is 1/0.
-ERROR: Arithmetic: evaluation error: `zero_divisor'
-ERROR: In:
-ERROR:   [10] _6834 is 1/0
-ERROR:    [9] <user>
 ```
 
 Define complicated functions with string:
@@ -145,8 +129,9 @@ fib2(40) = 165580141
 true.
 ```
 
-Support Julia's `'Package'.function` calls. The `'Package'` is quoted as a
-Prolog atom, otherwise uppercase words are treated as Prolog variables.
+`Jurassic.pl` also supports Julia's `'Package'.function` calls. The `'Package'`
+is quoted as a Prolog atom, otherwise uppercase words are treated as Prolog
+variables.
 
 ``` prolog
 ?- jl_using("Pkg").
@@ -161,6 +146,8 @@ true.
 true.
 
 ```
+
+## Interaction Between Prolog and Julia
 
 Unify Prolog term with Julia expressions:
 
@@ -184,10 +171,52 @@ Y = 12.830663096236986 ;
 ...
 ```
 
-Tuple is defined with `tuple/1` predicate:
+Unification with 2d-array will fail:
 
 ``` prolog
-?- X := tuple([1,2,3,"I'm string!"]).
+?- := f(x) = x*transpose(x).
+true.
+
+?- X := f([1,2,3]).
+[ERR] Cannot unify list with matrices and tensors!
+false.
+```
+
+## Julia Package and Source Files
+
+Import Julia packages or source files:
+
+``` prolog
+?- jl_using("Flux").
+?- jl_include("my_source_file.jl").
+```
+
+## Julia Constants and Keywords
+Julia constants:
+
+``` prolog
+% Jurassic.pl
+?- X := 1/0.
+X = inf.
+
+?- X := -1/0.
+X = ninf.
+
+% Prolog
+?- X is 1/0.
+ERROR: Arithmetic: evaluation error: `zero_divisor'
+ERROR: In:
+ERROR:   [10] _6834 is 1/0
+ERROR:    [9] <user>
+```
+
+Tuples are defined with `tuple/1` predicate:
+
+``` prolog
+?- a := tuple([1,2,3,"I'm string!",tuple([2.0,"is a double"])]),
+     := @show(a).
+a = (1, 2, 3, "I'm string!", (2.0, "is a double"))
+true.
 ```
 
 Currently, the unification only works for 1d-arrays:
@@ -200,24 +229,28 @@ true.
 X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172, 15.707963267948966].
 ```
 
-Unification with 2d-array will fail:
+Keywords assignment in a function calling are defined with `kw/2` predicate:
 
 ``` prolog
-?- := f(x) = x*transpose(x).
+% Plot with Jurassic.pl using Plots.jl
+?- jl_using("Plots").
 true.
-
-?- X := f([1,2,3]).
-[ERR] Cannot unify list with matrices and tensors!
-false.
+% Use backend GR
+?- := gr().
+true.
+% Use kw/2 to assign values to keywords,
+% This command is equals to Julia command:
+%     "plt = plot(rand(10), title = "10 Random numbers", fmt = :png, show = false))".
+?- plt := plot(rand(10), kw(title, "10 Random numbers"), kw(fmt, :png), kw(show, false)).
+true.
+% Save the plot.
+?- := savefig(plt, "rand10.png").
+true.
 ```
 
-Import Julia packages or source files:
+![plot](rand10.png)
 
-``` prolog
-?- jl_using("Flux").
-?- jl_include("my_source_file.jl").
-```
-
+# TODO
 More features to be added, e.g.:
 
 - Multi-dimension arrays;

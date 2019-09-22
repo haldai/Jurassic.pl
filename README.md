@@ -178,6 +178,24 @@ ccall((:clock, "libc.so.6"), Int32, ()) = 947332
 true.
 ```
 
+You can also use strings to define `ccall` functions, just remember to use
+escape character `\"` to pass string arguments:
+
+``` prolog
+?- := "function getenv(var::AbstractString)
+    val = ccall((:getenv, \"libc.so.6\"),
+                Cstring, (Cstring,), var)
+    if val == C_NULL
+        error(\"getenv: undefined variable: \", var)
+    end
+    unsafe_string(val)
+end".
+true.
+
+?- X := getenv("SHELL").
+X = "/bin/zsh".
+```
+
 ## Interaction Between Prolog and Julia
 
 Unify Prolog term with Julia expressions:

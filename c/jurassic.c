@@ -403,7 +403,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     } else {
       /* initialise an expression without using :call */
       if ( strchr(fname, '=') != NULL ||
-           strstr(fname, "call") != NULL ||
+           strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG

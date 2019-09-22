@@ -1,6 +1,10 @@
 # Jurassic.pl (侏逻辑)
 
-Call Julia code from Prolog
+Run Julia codes in Prolog.
+
+Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
+"**茱**莉娅 + **逻辑**程序" ⇒ (acronym) "茱逻辑" ⇒ (mandarin pronunciation) "zhū
+luó jì" ⇒ "**侏**罗纪" ⇒ "`Jurassic.pl`".
 
 # Prerequisite
 
@@ -12,7 +16,7 @@ This package is only tested on Linux, not sure if it will compile on MacOS
 
 # Build
 
-Just run `make` directly.
+Just run `make`.
 ``` shell
 make
 ```
@@ -30,7 +34,7 @@ Load `jurassic` module in SWI-Prolog:
 ```
 
 ## Julia Expressions
-Run Julia expression in Prolog with symbol `:=`:
+Call Julia expression in Prolog with symbol `:=`:
 
 ``` prolog
 ?- := println("Hello World!").
@@ -55,7 +59,7 @@ true.
 f([1, 2, 3, 4, 5]) = [1 2 3 4 5; 2 4 6 8 10; 3 6 9 12 15; 4 8 12 16 20; 5 10 15 20 25]
 true.
 ```
-Array reference with `[]`:
+Array reference by `[]`:
 
 ``` prolog
 ?- a := f([1,2,3,4,5]).
@@ -70,7 +74,7 @@ BoundsError: attempt to access 5×5 Array{Int64,2} at index [1, 100]
 false.
 ```
 
-Define complicated functions with string:
+Define more complex functions with string:
 
 ``` prolog
 ?- := "fib(n) = n <= 1 ? 1 : fib(n-1) + fib(n-2)".
@@ -102,7 +106,8 @@ fib2(46) = 2971215073
 true.
 ```
 
-Similar program in Prolog (**without tabling for memorising**) takes much more time:
+Similar program in Prolog (**without tabling for memorising facts**) takes much
+more time:
 
 ``` prolog
 fib_pl(N, 1) :-
@@ -129,6 +134,18 @@ fib2(40) = 165580141
 true.
 ```
 
+### Using Julia Packages
+
+Import Julia packages or source files:
+
+``` prolog
+?- jl_using("Flux").
+true.
+
+?- jl_include("my_source_file.jl").
+true.
+```
+
 `Jurassic.pl` also supports Julia's `'Package'.function` calls. The `'Package'`
 is quoted as a Prolog atom, otherwise uppercase words are treated as Prolog
 variables.
@@ -145,6 +162,20 @@ true.
   ...
 true.
 
+```
+
+### Julia `ccall`
+
+One of the most fascinating features of Julia is it can call c functions directly
+from dynamic libraries, i.e., the `ccall` function
+([link](https://docs.julialang.org/en/v1/manual/calling-c-and-fortran-code/)).
+`Jurassic.pl` also supports it:
+
+``` prolog
+% wrapping tuples with tuple/1 predicate, passing datatypes (Int32) as atoms:
+?- := @show(ccall(tuple([:clock, "libc.so.6"]), 'Int32', tuple([]))).
+ccall((:clock, "libc.so.6"), Int32, ()) = 947332
+true.
 ```
 
 ## Interaction Between Prolog and Julia
@@ -171,6 +202,16 @@ Y = 12.830663096236986 ;
 ...
 ```
 
+Currently, the unification only works for 1d-arrays:
+
+``` prolog
+?- := f(x) = pi.*x.
+true.
+
+?- X := f([1,2,3,4,5]).
+X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172, 15.707963267948966].
+```
+
 Unification with 2d-array will fail:
 
 ``` prolog
@@ -180,15 +221,6 @@ true.
 ?- X := f([1,2,3]).
 [ERR] Cannot unify list with matrices and tensors!
 false.
-```
-
-## Julia Package and Source Files
-
-Import Julia packages or source files:
-
-``` prolog
-?- jl_using("Flux").
-?- jl_include("my_source_file.jl").
 ```
 
 ## Julia Constants and Keywords
@@ -217,16 +249,6 @@ Tuples are defined with `tuple/1` predicate:
      := @show(a).
 a = (1, 2, 3, "I'm string!", (2.0, "is a double"))
 true.
-```
-
-Currently, the unification only works for 1d-arrays:
-
-``` prolog
-?- := f(x) = pi.*x.
-true.
-
-?- X := f([1,2,3,4,5]).
-X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172, 15.707963267948966].
 ```
 
 Keywords assignment in a function calling are defined with `kw/2` predicate:

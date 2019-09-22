@@ -3,8 +3,8 @@
 Run Julia codes in Prolog.
 
 Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
-"**茱**莉娅 + **逻辑**程序" ⇒ (acronym) "茱逻辑" ⇒ (mandarin pronunciation) "zhū
-luó jì" ⇒ "**侏**罗纪" ⇒ "`Jurassic.pl`".
+"**茱**莉娅 + **逻辑**程序" ⇒ (acronym) "茱逻辑" ⇒ (Mandarin pronunciation) "zhū
+luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
 
 # Prerequisite
 
@@ -34,7 +34,7 @@ Load `jurassic` module in SWI-Prolog:
 ```
 
 ## Julia Expressions
-Call Julia expression in Prolog with symbol `:=`:
+Call Julia expressions in Prolog with symbol `:=`:
 
 ``` prolog
 ?- := println("Hello World!").
@@ -59,7 +59,7 @@ true.
 f([1, 2, 3, 4, 5]) = [1 2 3 4 5; 2 4 6 8 10; 3 6 9 12 15; 4 8 12 16 20; 5 10 15 20 25]
 true.
 ```
-Array reference by `[]`:
+Array element references by `[]`:
 
 ``` prolog
 ?- a := f([1,2,3,4,5]).
@@ -74,7 +74,7 @@ BoundsError: attempt to access 5×5 Array{Int64,2} at index [1, 100]
 false.
 ```
 
-Define more complex functions with string:
+Define more complex functions with strings:
 
 ``` prolog
 ?- := "fib(n) = n <= 1 ? 1 : fib(n-1) + fib(n-2)".
@@ -166,7 +166,7 @@ true.
 
 ### Julia `ccall`
 
-One of the most fascinating features of Julia is it can call c functions directly
+One of the most fascinating features of Julia is it can call c/fortran functions directly
 from shared libraries, i.e., the `ccall` function
 ([link](https://docs.julialang.org/en/v1/manual/calling-c-and-fortran-code/)).
 `Jurassic.pl` also supports it:
@@ -198,7 +198,7 @@ X = "/bin/zsh".
 
 ## Interaction Between Prolog and Julia
 
-Unify Prolog term with Julia expressions:
+Unify Prolog terms with Julia expressions:
 
 ``` prolog
 ?- := f(x) = sqrt(x) + x^2 + log(x) + 1.0.
@@ -217,7 +217,6 @@ Y = 7.10736074293304 ;
 X = 3,
 Y = 12.830663096236986 ;
 ...
-...
 ```
 
 Currently, the unification only works for 1d-arrays:
@@ -230,19 +229,21 @@ true.
 X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172, 15.707963267948966].
 ```
 
-Unification with 2d-array will fail:
+Unification of (>1)d-arrays will fail:
 
 ``` prolog
 ?- := f(x) = x*transpose(x).
 true.
 
-?- X := f([1,2,3]).
+?- := @show(typeof(f([1,2,3]))),
+   X := f([1,2,3]).
+typeof(f([1, 2, 3])) = Array{Int64,2}
 [ERR] Cannot unify list with matrices and tensors!
 false.
 ```
 
 ## Julia Constants and Keywords
-Julia constants:
+Julia constants as atoms, e.g. `Inf`, `missing`, `nothing`, etc.:
 
 ``` prolog
 % Jurassic.pl
@@ -260,7 +261,7 @@ ERROR:   [10] _6834 is 1/0
 ERROR:    [9] <user>
 ```
 
-Tuples are defined with Prolog predicate `tuple/1`:
+Tuples are defined with Prolog predicate `tuple/1`, whose argument is a list:
 
 ``` prolog
 ?- a := tuple([1,2,3,"I'm string!",tuple([2.0,"is a double"])]),
@@ -269,7 +270,7 @@ a = (1, 2, 3, "I'm string!", (2.0, "is a double"))
 true.
 ```
 
-Keywords assignment in a function calling are defined with `kw/2` predicate:
+Keyword assignments in a function call are represented by the `kw/2` predicate:
 
 ``` prolog
 % Plot with Jurassic.pl using Plots.jl
@@ -287,6 +288,7 @@ true.
 ?- := savefig(plt, "rand10.png").
 true.
 ```
+Plotted image:
 
 ![plot](rand10.png)
 

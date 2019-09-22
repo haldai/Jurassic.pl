@@ -21,7 +21,7 @@ Just run `make`.
 make
 ```
 
-To debug the package, please uncomment the `#defeine JURASSIC_DEBUG` in
+To debug the package, please uncomment the `#define JURASSIC_DEBUG` in
 `c/jurassic.h`.
 
 # Usage
@@ -172,7 +172,7 @@ from shared libraries, i.e., the `ccall` function
 `Jurassic.pl` also supports it:
 
 ``` prolog
-% wrapping tuples with tuple/1 predicate, passing datatypes (Int32) as atoms:
+% wrapping tuples with predicate tuple/1, passing datatypes (Int32) as atoms:
 ?- := @show(ccall(tuple([:clock, "libc.so.6"]), 'Int32', tuple([]))).
 ccall((:clock, "libc.so.6"), Int32, ()) = 947332
 true.
@@ -242,7 +242,7 @@ ERROR:   [10] _6834 is 1/0
 ERROR:    [9] <user>
 ```
 
-Tuples are defined with `tuple/1` predicate:
+Tuples are defined with Prolog predicate `tuple/1`:
 
 ``` prolog
 ?- a := tuple([1,2,3,"I'm string!",tuple([2.0,"is a double"])]),

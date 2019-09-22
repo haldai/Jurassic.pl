@@ -167,7 +167,7 @@ true.
 ### Julia `ccall`
 
 One of the most fascinating features of Julia is it can call c functions directly
-from dynamic libraries, i.e., the `ccall` function
+from shared libraries, i.e., the `ccall` function
 ([link](https://docs.julialang.org/en/v1/manual/calling-c-and-fortran-code/)).
 `Jurassic.pl` also supports it:
 

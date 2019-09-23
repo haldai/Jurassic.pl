@@ -5,7 +5,7 @@ Run Julia codes in Prolog.
 - Prolog is a powerful logic programming language designed for automating
 first-order logical reasoning.
 - [Julia](https://julialang.org/) is
-a [high-efficient](https://julialang.org/benchmarks/) Python-like programming
+a [highly-efficient](https://julialang.org/benchmarks/) Python-like programming
 language designed for data science, machine learning and scientific domains.
 
 Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
@@ -174,7 +174,7 @@ true.
 
 ### Julia `ccall`
 
-One of the most fascinating features of Julia is it can call c/fortran functions directly
+One of the most fascinating features of Julia is it can call C/Fortran functions directly
 from shared libraries, i.e., the `ccall` function
 ([link](https://docs.julialang.org/en/v1/manual/calling-c-and-fortran-code/)).
 `Jurassic.pl` also supports it:

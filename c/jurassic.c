@@ -315,7 +315,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
   if (fname == NULL || strlen(fname) == 0) {
     printf("[ERR] Read functor name failed!\n");
     return NULL;
-  } else if (fname[0] == ':') {
+  } else if (fname[0] == ':' && arity < 2) {
     char *sym_str;
     if (!PL_get_chars(expr, &sym_str,
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))

@@ -5,9 +5,8 @@ Run Julia codes in Prolog.
 - Prolog is a powerful logic programming language designed for automating
 first-order logical reasoning.
 - [Julia](https://julialang.org/) is
-a [high-efficient](https://julialang.org/benchmarks/) Python-like scripting
-programming language designed for data science, machine learning and scientific
-domains.
+a [high-efficient](https://julialang.org/benchmarks/) Python-like programming
+language designed for data science, machine learning and scientific domains.
 
 Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
 "**茱**莉娅 + **逻辑**程序" ⇒ (acronym) "茱逻辑" ⇒ (Mandarin pronunciation) "zhū

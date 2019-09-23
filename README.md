@@ -9,7 +9,7 @@ luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
 # Prerequisites
 
 - [Julia](https://julialang.org/)
-- [SWI-Prolog (devel)](https://github.com/SWI-Prolog/swipl-devel)
+- [SWI-Prolog](https://www.swi-prolog.org/)
 
 This package is only tested on Linux, not sure if it will compile on MacOS
 (maybe) or Windows (very unlikely).

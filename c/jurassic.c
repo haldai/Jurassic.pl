@@ -864,7 +864,7 @@ install_t install_jurassic(void) {
   /* initialisation */
   jl_init();
   PL_on_halt(halt_julia, 0);
-  checked_send_command_str("println(\"Done.\")");
+  checked_send_command_str("println(\" Done.\")");
 }
 
 /* Allow returning value and unifying with Prolog variable */

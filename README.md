@@ -10,9 +10,9 @@ a [high-efficient](https://julialang.org/benchmarks/) Python-like scripting
 programming language designed for data science, machine learning and scientific
 domains.
 
-Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
+<span style="font-size:small">Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
 "**茱**莉娅 + **逻辑**程序" ⇒ (acronym) "茱逻辑" ⇒ (Mandarin pronunciation) "zhū
-luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
+luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".</span>
 
 # Prerequisites
 

@@ -338,7 +338,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     jl_expr_t *ex_arg = compound_to_jl_expr(arg);
     JL_GC_PUSH1(&ex_arg);
     jl_exprargset(ex, 0, jl_fname(fname));
-    jl_exprargset(ex, 1, (jl_value_t *)jl_linenode_line(ex_arg));
+    jl_exprargset(ex, 1, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing));
     jl_exprargset(ex, 2, ex_arg);
 #ifdef JURASSIC_DEBUG
     jl_static_show(JL_STDOUT, (jl_value_t *) ex);
@@ -622,7 +622,6 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
     break;
   }
   case PL_TERM: {
-    // return compound_to_jl(term, ret);
     JL_TRY {
       jl_expr_t *expr = compound_to_jl_expr(term);
       JL_GC_PUSH1(&expr);
@@ -631,7 +630,7 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
       jl_static_show(JL_STDOUT, (jl_value_t *)expr);
       jl_printf(JL_STDOUT, "\n");
 #endif
-      *ret = jl_toplevel_eval(jl_main_module, (jl_value_t *)expr);
+      *ret = jl_toplevel_eval_in(jl_main_module, (jl_value_t *)expr);
       JL_GC_POP();
       jl_exception_clear();
     } JL_CATCH {

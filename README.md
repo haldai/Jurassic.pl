@@ -6,9 +6,9 @@ Naming of this software: "**JU**lia in **LOGIC** programming" ⇒ (translation)
 "**茱**莉娅 + **逻辑**程序" ⇒ (acronym) "茱逻辑" ⇒ (Mandarin pronunciation) "zhū
 luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
 
-# Prerequisite
+# Prerequisites
 
-- [Julia](https://github.com/JuliaLang)
+- [Julia](https://julialang.org/)
 - [SWI-Prolog (devel)](https://github.com/SWI-Prolog/swipl-devel)
 
 This package is only tested on Linux, not sure if it will compile on MacOS

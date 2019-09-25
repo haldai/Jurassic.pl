@@ -208,11 +208,28 @@ int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
       jl_printf(JL_STDOUT, "\n");
 #endif
       return jl_access_var(a, ret);
+    } else if (strchr(a, '.')){
+      /* Expression A1.A2 */
+#ifdef JURASSIC_DEBUG
+      printf("dot symbol: ");
+#endif
+      jl_expr_t *dot_expr = jl_dotname(a);
+#ifdef JURASSIC_DEBUG
+      jl_static_show(JL_STDOUT, (jl_value_t *) dot_expr);
+      jl_printf(JL_STDOUT, "\n");
+#endif
+      JL_TRY {
+        *ret = jl_toplevel_eval(jl_main_module, (jl_value_t *)dot_expr);
+        jl_exception_clear();
+      } JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
+        *ret = NULL;
+      }
     } else { /* default as Symbol */
 #ifdef JURASSIC_DEBUG
       printf("Fallback to Symbol.\n");
 #endif
-      *ret = (jl_value_t *)jl_symbol(a);
+      *ret = (jl_value_t *) jl_symbol(a);
     }
     jl_exception_clear();
   } JL_CATCH {
@@ -249,26 +266,32 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
 }
 
 /* Process function name */
-static jl_sym_t *jl_fname(const char *fname) {
-  char *dot = strchr(fname, '.');
+jl_expr_t *jl_dotname(const char *dotname) {
+  char *dot = strrchr(dotname, '.');
   jl_expr_t *ex;
   if (dot == NULL ||
-      strlen(fname) == 2) /* fname is ".+", ".*" ... */
-    return jl_symbol(fname);
+      (dot != NULL && strlen(dotname) == 2)) /* dotname is ".+", ".*" ... */
+    return (jl_expr_t *) jl_symbol(dotname);
   else {
-    /* if fname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
+    /* if dotname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
     JL_TRY {
       /* Module name */
-      char *tok = strtok((char *) fname, ".");
+      size_t mod_len = (dot - dotname)/sizeof(char);
+      char module[mod_len + 1];
+      strncpy(module, dotname, mod_len);
+      module[mod_len] = '\0';
       ex = jl_exprn(jl_symbol("."), 2);
+#ifdef JURASSIC_DEBUG
+      printf("Dot name: Struct / .Key = %s / %s\n", module, dot);
+#endif
       /* QuoteNode(function) */
-      jl_exprargset(ex, 0, jl_symbol(tok));
+      jl_exprargset(ex, 0, jl_dotname(module));
       jl_exprargset(ex, 1, jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();
       return NULL;
     }
-    return (jl_sym_t *) ex;
+    return ex;
   }
 }
 
@@ -337,7 +360,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     jl_expr_t *ex = jl_exprn(jl_symbol("macrocall"), arity + 2);
     jl_expr_t *ex_arg = compound_to_jl_expr(arg);
     JL_GC_PUSH1(&ex_arg);
-    jl_exprargset(ex, 0, jl_fname(fname));
+    jl_exprargset(ex, 0, jl_dotname(fname));
     jl_exprargset(ex, 1, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing));
     jl_exprargset(ex, 2, ex_arg);
 #ifdef JURASSIC_DEBUG
@@ -398,7 +421,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
       jl_expr_t *ex = jl_exprn(jl_symbol("call"), 1);
       /* "XX.xx" has to be processed as Expr(XX, :(xx))*/
-      jl_exprargset(ex, 0, jl_fname(fname));
+      jl_exprargset(ex, 0, jl_dotname(fname));
       return ex;
     } else {
       /* initialise an expression without using :call */
@@ -409,32 +432,11 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
 #endif
-        jl_expr_t *ex = jl_exprn(jl_fname(fname), arity);
+        jl_expr_t *ex = jl_exprn((jl_sym_t *) jl_dotname(fname), arity);
 
         /* assign arguments */
-        term_t arg_term = PL_new_term_ref();
-        for (size_t i = 0; i < arity; i++) { // Prolog argument index starts from 1
-#ifdef JURASSIC_DEBUG
-          printf("----    Argument %lu: ", i);
-#endif
-          if (!PL_get_arg(i+1, expr, arg_term)) {
-            printf("[ERR] Get term argument %lu failed!\n", i);
-            return NULL;
-          }
-#ifdef JURASSIC_DEBUG
-          char *str_arg;
-          if (!PL_get_chars(arg_term, &str_arg,
-                            CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
-            return NULL;
-          printf("%s.\n", str_arg);
-#endif
-          jl_expr_t *a_i = compound_to_jl_expr(arg_term);
-          if (a_i == NULL) {
-            printf("[ERR] Convert term argument %lu failed!\n", i);
-            return NULL;
-          }
-          jl_exprargset(ex, i, a_i);
-        }
+        if (!jl_set_args(&ex, expr, arity, 0, 1))
+          return NULL;
 #ifdef JURASSIC_DEBUG
         jl_static_show(JL_STDOUT, (jl_value_t *) ex);
         jl_printf(JL_STDOUT, "\n");
@@ -448,34 +450,13 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
         jl_expr_t *ex = jl_exprn(jl_symbol("call"), arity+1);
 
         /* set fname as the first argument */
-        jl_exprargset(ex, 0, jl_fname(fname));
+        jl_exprargset(ex, 0, jl_dotname(fname));
 #ifdef JURASSIC_DEBUG
         printf("----    Argument 0: %s.\n", fname);
 #endif
         /* other arguments */
-        term_t arg_term = PL_new_term_ref();
-        for (size_t i = 0; i < arity; i++) { // Prolog argument index starts from 1
-#ifdef JURASSIC_DEBUG
-          printf("----    Argument %lu: ", i+1);
-#endif
-          if (!PL_get_arg(i+1, expr, arg_term)) {
-            printf("[ERR] Get term argument %lu failed!\n", i);
-            return NULL;
-          }
-#ifdef JURASSIC_DEBUG
-          char *str_arg;
-          if (!PL_get_chars(arg_term, &str_arg,
-                            CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
-            return NULL;
-          printf("%s.\n", str_arg);
-#endif
-          jl_expr_t *a_i = compound_to_jl_expr(arg_term);
-          if (a_i == NULL) {
-            printf("[ERR] Convert term argument %lu failed!\n", i);
-            return NULL;
-          }
-          jl_exprargset(ex, i+1, a_i);
-        }
+        if (!jl_set_args(&ex, expr, arity, 1, 1))
+          return NULL;
 #ifdef JURASSIC_DEBUG
         jl_static_show(JL_STDOUT, (jl_value_t *) ex);
         jl_printf(JL_STDOUT, "\n");
@@ -485,6 +466,39 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     }
   }
   return NULL;
+}
+
+int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size_t start_pl) {
+  term_t arg_term = PL_new_term_ref();
+  for (size_t i = 0; i < arity; i++) { // Prolog argument index starts from 1
+#ifdef JURASSIC_DEBUG
+    printf("----    Argument %lu: ", i);
+#endif
+    if (!PL_get_arg(i + start_pl, expr, arg_term)) {
+      printf("[ERR] Get term argument %lu failed!\n", i);
+      return JURASSIC_FAIL;
+    }
+#ifdef JURASSIC_DEBUG
+    char *str_arg;
+    if (!PL_get_chars(arg_term, &str_arg,
+                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+      return JURASSIC_FAIL;
+    printf("%s.\n", str_arg);
+#endif
+    JL_TRY {
+      jl_expr_t *a_i = compound_to_jl_expr(arg_term);
+      if (a_i == NULL) {
+        printf("[ERR] Convert term argument %lu failed!\n", i);
+        return JURASSIC_FAIL;
+      }
+      jl_exprargset(*ex, i + start_jl, a_i);
+      jl_exception_clear();
+    } JL_CATCH {
+      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      return JURASSIC_FAIL;
+    }
+  }
+  return JURASSIC_SUCCESS;
 }
 
 int list_to_jl(term_t list, int length, jl_array_t **ret, int flag_sym) {

@@ -14,16 +14,8 @@
 #define JURASSIC_TYPE_ERR -1
 #define JURASSIC_CALL_ERR -2
 
-int list_length(term_t list);
 jl_expr_t *jl_dotname(const char *dotname);
 int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size_t start_pl);
-jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
-int checked_eval_string(const char *code, jl_value_t **ret);
-jl_value_t * checked_send_command_str(const char *code);
-void checked_jl_command(const char *code);
-int jl_is_defined(const char *var);
-int jl_access_var(const char *var, jl_value_t **ret);
-int jl_assign_var(const char *var, jl_value_t *val);
 int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym); /* When an atom is a defined Julia variable,
                                                                 the flag_sym determines whether to return
                                                                 its symbol or its value */

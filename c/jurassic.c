@@ -27,11 +27,66 @@ static int halt_julia(int rc, void *p) {
   return 0;
 }
 
-/*******************************
- *      static functions       *
- *******************************/
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   static functions
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Julia source */
+static jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e) {
+  jl_value_t *v = jl_get_global(m, e);
+  if (v == NULL)
+    jl_undefined_var_error(e);
+  return v;
+}
+
+static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f) {
+  jl_ptls_t ptls = jl_get_ptls_states();
+  jl_value_t **args;
+  JL_GC_PUSHARGS(args, 3);
+  args[1] = jl_toplevel_eval_in(m, x);
+  args[2] = jl_toplevel_eval_in(m, f);
+  if (jl_is_module(args[1])) {
+    JL_TYPECHK(getfield, symbol, args[2]);
+    args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*) args[2]);
+  } else {
+    args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+    size_t last_age = ptls->world_age;
+    ptls->world_age = jl_get_world_counter();
+    args[0] = jl_apply(args, 3);
+    ptls->world_age = last_age;
+  }
+  JL_GC_POP();
+  return args[0];
+}
+
+static void jl_throw_exception() {
+  jl_call2(jl_get_function(jl_base_module, "showerror"),
+           jl_stderr_obj(),
+           jl_exception_occurred());
+  jl_printf(jl_stderr_stream(), "\n");
+}
+
+/* The built-in function to initialise an expression */
+static jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) {
+  jl_expr_t *ex;
+  JL_TRY {
+    jl_array_t *ar = jl_alloc_vec_any(n);
+    JL_GC_PUSH1(&ar);
+    ex = (jl_expr_t*)jl_gc_allocobj(sizeof(jl_expr_t));
+    jl_set_typeof((jl_value_t *)ex, jl_expr_type);
+    ex->head = head;
+    ex->args = ar;
+    JL_GC_POP();
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
+    return NULL;
+  }
+  return ex;
+}
+
 /* borrowed from real */
-int list_length(term_t list) {
+static int list_length(term_t list) {
   term_t tail = PL_new_term_ref();
   size_t len = -1;
   switch(PL_skip_list(list, tail, &len)) {
@@ -49,27 +104,8 @@ int list_length(term_t list) {
   }
 }
 
-/* Have to adapt the built-in function to initialise an expression */
-jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) {
-  jl_expr_t *ex;
-  JL_TRY {
-      jl_array_t *ar = jl_alloc_vec_any(n);
-      JL_GC_PUSH1(&ar);
-      ex = (jl_expr_t*)jl_gc_allocobj(sizeof(jl_expr_t));
-      jl_set_typeof((jl_value_t *)ex, jl_expr_type);
-      ex->head = head;
-      ex->args = ar;
-      JL_GC_POP();
-      jl_exception_clear();
-  } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
-    return NULL;
-  }
-  return ex;
-}
-
 /* eval julia string (from julia/src/embedding.c) with checking */
-int checked_eval_string(const char *code, jl_value_t **ret) {
+static int checked_eval_string(const char *code, jl_value_t **ret) {
   *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
         // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
@@ -84,7 +120,7 @@ int checked_eval_string(const char *code, jl_value_t **ret) {
     return JURASSIC_SUCCESS;
 }
 
-jl_value_t * checked_send_command_str(const char *code) {
+static jl_value_t * checked_send_command_str(const char *code) {
   jl_value_t *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
         // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
@@ -97,8 +133,9 @@ jl_value_t * checked_send_command_str(const char *code) {
   assert(ret && "Missing return value but no exception occurred!");
   return ret;
 }
+
 /* eval julia code without return */
-void checked_jl_command(const char *code) {
+static void checked_jl_command(const char *code) {
   jl_eval_string(code);
   if (jl_exception_occurred()) {
     // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
@@ -110,18 +147,19 @@ void checked_jl_command(const char *code) {
 }
 
 /* check if a variable is defined in julia */
-int jl_is_defined(const char *var) {
+static int jl_is_defined(const char *var) {
   return jl_get_global(jl_main_module, jl_symbol_lookup(var))!= NULL ? TRUE : FALSE;
 }
 
 /* get julia variable from string */
-int jl_access_var(const char *var, jl_value_t **ret) {
+static int jl_access_var(const char *var, jl_value_t **ret) {
   if (jl_is_defined(var)) {
     JL_TRY {
       *ret = jl_get_global(jl_main_module, jl_symbol_lookup(var));
       jl_exception_clear();
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
       *ret = NULL;
       return JURASSIC_FAIL;
     }
@@ -132,16 +170,78 @@ int jl_access_var(const char *var, jl_value_t **ret) {
 }
 
 /* variable assignment */
-int jl_assign_var(const char *var, jl_value_t *val) {
+static int jl_assign_var(const char *var, jl_value_t *val) {
   JL_TRY {
-      jl_set_global(jl_main_module, jl_symbol_lookup(var), val);
-      jl_exception_clear();
+    jl_set_global(jl_main_module, jl_symbol_lookup(var), val);
+    jl_exception_clear();
   } JL_CATCH {
     jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
     return JURASSIC_FAIL;
   }
   return JURASSIC_SUCCESS;
 }
+
+/* assign Julia expression arguments with Prolog list */
+static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t len) {
+  term_t arg_term = PL_new_term_ref();
+  term_t list_ = PL_copy_term_ref(list);
+  size_t i = start;
+  while (PL_get_list(list_, arg_term, list_) && i < start + len) {
+    JL_TRY {
+#ifdef JURASSIC_DEBUG
+      printf("----    Argument %lu: ", i);
+      char *str_arg;
+      if (!PL_get_chars(arg_term, &str_arg,
+                        CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+        return JURASSIC_FAIL;
+      printf("%s.\n", str_arg);
+#endif
+      jl_expr_t *a_i = compound_to_jl_expr(arg_term);
+      if (a_i == NULL) {
+        printf("[ERR] Convert term argument %lu failed!\n", i);
+        return JURASSIC_FAIL;
+      }
+      i++;
+      jl_exprargset(*ex, i, a_i);
+      jl_exception_clear();
+    } JL_CATCH {
+      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
+    }
+  }
+  return JURASSIC_SUCCESS;
+}
+
+/* Process function name */
+static jl_value_t *jl_dot(const char *dotname) {
+  char *dot = strrchr(dotname, '.');
+  if (dot == NULL || jl_is_operator((char *) dotname))
+    /* no dot or is just operators ".+", ".*" ... */
+    return (jl_value_t *) jl_symbol(dotname);
+  else {
+    /* if dotname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
+    JL_TRY {
+      /* Module name */
+      size_t mod_len = (dot - dotname)/sizeof(char);
+      char module[mod_len + 1];
+      strncpy(module, dotname, mod_len);
+      module[mod_len] = '\0';
+      /* QuoteNode(function) */
+      return jl_eval_dot_expr(jl_main_module,
+                              jl_dot(module),
+                              jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
+    } JL_CATCH {
+      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
+      return NULL;
+    }
+  }
+}
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   Dynamic functions
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 /* prolog expression to string */
 int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
@@ -208,23 +308,14 @@ int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
       jl_printf(JL_STDOUT, "\n");
 #endif
       return jl_access_var(a, ret);
-    } else if (strchr(a, '.')){
+    } else if (strchr(a, '.') != NULL){
       /* Expression A1.A2 */
 #ifdef JURASSIC_DEBUG
-      printf("dot symbol: ");
+      printf("dot symbol.\n");
 #endif
-      jl_expr_t *dot_expr = jl_dotname(a);
-#ifdef JURASSIC_DEBUG
-      jl_static_show(JL_STDOUT, (jl_value_t *) dot_expr);
-      jl_printf(JL_STDOUT, "\n");
-#endif
-      JL_TRY {
-        *ret = jl_toplevel_eval(jl_main_module, (jl_value_t *)dot_expr);
-        jl_exception_clear();
-      } JL_CATCH {
-        jl_get_ptls_states()->previous_exception = jl_current_exception();
-        *ret = NULL;
-      }
+      *ret = jl_dot(a);
+      if (!ret)
+        return JURASSIC_FAIL;
     } else { /* default as Symbol */
 #ifdef JURASSIC_DEBUG
       printf("Fallback to Symbol.\n");
@@ -238,61 +329,6 @@ int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
     return JURASSIC_FAIL;
   }
   return JURASSIC_SUCCESS;
-}
-
-/* assign Julia expression arguments with Prolog list */
-static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t len) {
-  term_t arg_term = PL_new_term_ref();
-  term_t list_ = PL_copy_term_ref(list);
-  size_t i = start;
-  while (PL_get_list(list_, arg_term, list_) && i < start + len) {
-#ifdef JURASSIC_DEBUG
-    printf("----    Argument %lu: ", i);
-    char *str_arg;
-    if (!PL_get_chars(arg_term, &str_arg,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
-      return JURASSIC_FAIL;
-    printf("%s.\n", str_arg);
-#endif
-    jl_expr_t *a_i = compound_to_jl_expr(arg_term);
-    if (a_i == NULL) {
-      printf("[ERR] Convert term argument %lu failed!\n", i);
-      return JURASSIC_FAIL;
-    }
-    jl_exprargset(*ex, i, a_i);
-    i++;
-  }
-  return JURASSIC_SUCCESS;
-}
-
-/* Process function name */
-jl_expr_t *jl_dotname(const char *dotname) {
-  char *dot = strrchr(dotname, '.');
-  jl_expr_t *ex;
-  if (dot == NULL ||
-      (dot != NULL && strlen(dotname) == 2)) /* dotname is ".+", ".*" ... */
-    return (jl_expr_t *) jl_symbol(dotname);
-  else {
-    /* if dotname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
-    JL_TRY {
-      /* Module name */
-      size_t mod_len = (dot - dotname)/sizeof(char);
-      char module[mod_len + 1];
-      strncpy(module, dotname, mod_len);
-      module[mod_len] = '\0';
-      ex = jl_exprn(jl_symbol("."), 2);
-#ifdef JURASSIC_DEBUG
-      printf("Dot name: Struct / .Key = %s / %s\n", module, dot);
-#endif
-      /* QuoteNode(function) */
-      jl_exprargset(ex, 0, jl_dotname(module));
-      jl_exprargset(ex, 1, jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
-    } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
-      return NULL;
-    }
-    return ex;
-  }
 }
 
 /* convert prolog term to julia expression */
@@ -360,7 +396,10 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     jl_expr_t *ex = jl_exprn(jl_symbol("macrocall"), arity + 2);
     jl_expr_t *ex_arg = compound_to_jl_expr(arg);
     JL_GC_PUSH1(&ex_arg);
-    jl_exprargset(ex, 0, jl_dotname(fname));
+    jl_value_t *func = jl_dot(fname);
+    if (!func || !ex_arg)
+      return NULL;
+    jl_exprargset(ex, 0, func);
     jl_exprargset(ex, 1, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing));
     jl_exprargset(ex, 2, ex_arg);
 #ifdef JURASSIC_DEBUG
@@ -421,7 +460,10 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
       jl_expr_t *ex = jl_exprn(jl_symbol("call"), 1);
       /* "XX.xx" has to be processed as Expr(XX, :(xx))*/
-      jl_exprargset(ex, 0, jl_dotname(fname));
+      jl_value_t *func = jl_dot(fname);
+      if (!func)
+        return NULL;
+      jl_exprargset(ex, 0, func);
       return ex;
     } else {
       /* initialise an expression without using :call */
@@ -432,35 +474,47 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
 #endif
-        jl_expr_t *ex = jl_exprn((jl_sym_t *) jl_dotname(fname), arity);
-
-        /* assign arguments */
-        if (!jl_set_args(&ex, expr, arity, 0, 1))
+        jl_value_t *func = jl_dot(fname);
+        if (!func)
           return NULL;
+        jl_expr_t *ex = jl_exprn((jl_sym_t *) func, arity);
+        JL_GC_PUSH1(&ex);
+        /* assign arguments */
+        if (!jl_set_args(&ex, expr, arity, 0, 1)) {
+          JL_GC_POP();
+          return NULL;
+        }
 #ifdef JURASSIC_DEBUG
         jl_static_show(JL_STDOUT, (jl_value_t *) ex);
         jl_printf(JL_STDOUT, "\n");
 #endif
+        JL_GC_POP();
         return ex;
       } else {
 #ifdef JURASSIC_DEBUG
         printf("        Functor: call/%lu.\n", arity+1);
 #endif
         /* use :call as Expr head */
-        jl_expr_t *ex = jl_exprn(jl_symbol("call"), arity+1);
-
+        jl_expr_t *ex = jl_exprn(jl_symbol("call"), arity + 1);
+        JL_GC_PUSH1(&ex);
         /* set fname as the first argument */
-        jl_exprargset(ex, 0, jl_dotname(fname));
+        jl_value_t *func = jl_dot(fname);
+        if (!func)
+          return NULL;
+        jl_exprargset(ex, 0, func);
 #ifdef JURASSIC_DEBUG
         printf("----    Argument 0: %s.\n", fname);
 #endif
         /* other arguments */
-        if (!jl_set_args(&ex, expr, arity, 1, 1))
+        if (!jl_set_args(&ex, expr, arity, 1, 1)) {
+          JL_GC_POP();
           return NULL;
+        }
 #ifdef JURASSIC_DEBUG
         jl_static_show(JL_STDOUT, (jl_value_t *) ex);
         jl_printf(JL_STDOUT, "\n");
 #endif
+        JL_GC_POP();
         return ex;
       }
     }
@@ -472,10 +526,10 @@ int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size
   term_t arg_term = PL_new_term_ref();
   for (size_t i = 0; i < arity; i++) { // Prolog argument index starts from 1
 #ifdef JURASSIC_DEBUG
-    printf("----    Argument %lu: ", i);
+    printf("----    Argument %lu: ", i + start_jl);
 #endif
     if (!PL_get_arg(i + start_pl, expr, arg_term)) {
-      printf("[ERR] Get term argument %lu failed!\n", i);
+      printf("[ERR] Get term argument %lu failed!\n", i + start_pl);
       return JURASSIC_FAIL;
     }
 #ifdef JURASSIC_DEBUG
@@ -488,13 +542,14 @@ int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size
     JL_TRY {
       jl_expr_t *a_i = compound_to_jl_expr(arg_term);
       if (a_i == NULL) {
-        printf("[ERR] Convert term argument %lu failed!\n", i);
+        printf("[ERR] Convert Prolog term argument %lu failed!\n", i + start_jl);
         return JURASSIC_FAIL;
       }
       jl_exprargset(*ex, i + start_jl, a_i);
       jl_exception_clear();
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
       return JURASSIC_FAIL;
     }
   }
@@ -638,6 +693,10 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
   case PL_TERM: {
     JL_TRY {
       jl_expr_t *expr = compound_to_jl_expr(term);
+      if (expr == NULL) {
+        *ret = NULL;
+        return JURASSIC_FAIL;
+      }
       JL_GC_PUSH1(&expr);
 #ifdef JURASSIC_DEBUG
       jl_printf(JL_STDOUT, "[DEBUG] Parsed expression:\n");
@@ -649,6 +708,7 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
       jl_exception_clear();
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
       *ret = NULL;
       return JURASSIC_FAIL;
     }
@@ -899,6 +959,7 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
     JL_GC_POP();
   } JL_CATCH {
     jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
     PL_fail;
   }
   PL_succeed;

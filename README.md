@@ -306,6 +306,11 @@ More features to be added, e.g.:
 - Multi-dimension arrays;
 - Multi-threading.
 
+Compile and test code in other platform, e.g.:
+
+- MaxOS
+- Windows
+
 # Acknowledgement
 
 The `Jurassic.pl` package is inspired by

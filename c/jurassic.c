@@ -450,13 +450,18 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     /* use :ref as head, list members as arguments */
     /* a[1,2,3] =.. (:ref, :a, 1, 2, 3)*/
     jl_expr_t *ex = jl_exprn(jl_symbol("ref"), len+1);
+    JL_GC_PUSH1(&ex);
     jl_exprargset(ex, 0, compound_to_jl_expr(collection)); /* first argument is the collection */
-    if (!list_to_expr_args(list, &ex, 1, len)) /* following arguments are references */
+    /* following arguments are references */
+    if (!list_to_expr_args(list, &ex, 1, len)) {
+      JL_GC_POP();
       return NULL;
+    }
 #ifdef JURASSIC_DEBUG
     jl_static_show(JL_STDOUT, (jl_value_t *) ex);
     jl_printf(JL_STDOUT, "\n");
 #endif
+    JL_GC_POP();
     return ex;
   } else if (PL_is_functor(expr, FUNCTOR_tuple1) && arity == 1) {
     term_t list = PL_new_term_ref();;
@@ -470,12 +475,16 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     /* use :tuple as head, list members as arguments */
     jl_expr_t *ex = jl_exprn(jl_symbol("tuple"), len);
-    if (!list_to_expr_args(list, &ex, 0, len))
+    JL_GC_PUSH1(&ex);
+    if (!list_to_expr_args(list, &ex, 0, len)) {
+      JL_GC_POP();
       return NULL;
+    }
 #ifdef JURASSIC_DEBUG
     jl_static_show(JL_STDOUT, (jl_value_t *) ex);
     jl_printf(JL_STDOUT, "\n");
 #endif
+    JL_GC_POP();
     return ex;
   } else {
     /* functor to julia function symbol */
@@ -485,11 +494,15 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       printf("[DEBUG] 0-argument function: %s().\n", fname);
 #endif
       jl_expr_t *ex = jl_exprn(jl_symbol("call"), 1);
+      JL_GC_PUSH1(&ex);
       /* "XX.xx" has to be processed as Expr(XX, :(xx))*/
       jl_value_t *func = jl_dot(fname);
-      if (!func)
+      if (!func) {
+        JL_GC_POP();
         return NULL;
+      }
       jl_exprargset(ex, 0, func);
+      JL_GC_POP();
       return ex;
     } else {
       /* initialise an expression without using :call */

@@ -124,27 +124,27 @@ static int list_length(term_t list) {
 static int checked_eval_string(const char *code, jl_value_t **ret) {
   *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
-        // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
-        jl_call2(jl_get_function(jl_base_module, "showerror"),
-                 jl_stderr_obj(),
-                 jl_exception_occurred());
-        jl_printf(jl_stderr_stream(), "\n");
-        *ret = NULL;
-        return JURASSIC_FAIL;
-    }
-    assert(*ret && "Missing return value but no exception occurred!");
-    return JURASSIC_SUCCESS;
+    // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
+    jl_call2(jl_get_function(jl_base_module, "showerror"),
+             jl_stderr_obj(),
+             jl_exception_occurred());
+    jl_printf(jl_stderr_stream(), "\n");
+    *ret = NULL;
+    return JURASSIC_FAIL;
+  }
+  assert(*ret && "Missing return value but no exception occurred!");
+  return JURASSIC_SUCCESS;
 }
 
 static jl_value_t * checked_send_command_str(const char *code) {
   jl_value_t *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
-        // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
-        jl_call2(jl_get_function(jl_base_module, "showerror"),
-                 jl_stderr_obj(),
-                 jl_exception_occurred());
-        jl_printf(jl_stderr_stream(), "\n");
-        return NULL;
+    // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
+    jl_call2(jl_get_function(jl_base_module, "showerror"),
+             jl_stderr_obj(),
+             jl_exception_occurred());
+    jl_printf(jl_stderr_stream(), "\n");
+    return NULL;
   }
   assert(ret && "Missing return value but no exception occurred!");
   return ret;
@@ -156,9 +156,9 @@ static void checked_jl_command(const char *code) {
   if (jl_exception_occurred()) {
     // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
     jl_call2(jl_get_function(jl_base_module, "showerror"),
-                 jl_stderr_obj(),
-                 jl_exception_occurred());
-        jl_printf(jl_stderr_stream(), "\n");
+             jl_stderr_obj(),
+             jl_exception_occurred());
+    jl_printf(jl_stderr_stream(), "\n");
   }
 }
 
@@ -260,7 +260,7 @@ static jl_value_t *jl_dot(const char *dotname) {
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Dynamic functions
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 /* prolog expression to string */
 int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
@@ -606,7 +606,7 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
   char * show;
   /* string, to string*/
   if (!PL_get_chars(term, &show,
-                CVT_WRITE|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_WRITE|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     return JURASSIC_FAIL;
   printf("[DEBUG] term = %s\n", show);
 #endif
@@ -623,9 +623,9 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
     atom_t atom;
     if (!PL_get_atom(term, &atom)) {
 #ifdef JURASSIC_DEBUG
-    printf("FAILED!\n");
+      printf("FAILED!\n");
 #endif
-    *ret = NULL;
+      *ret = NULL;
       return JURASSIC_FAIL;
     }
     return atom_to_jl(atom, ret, flag_sym);
@@ -644,9 +644,9 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
                       CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8)) {
       *ret = NULL;
 #ifdef JURASSIC_DEBUG
-    printf("FAILED!\n");
+      printf("FAILED!\n");
 #endif
-    return JURASSIC_FAIL;
+      return JURASSIC_FAIL;
     } else {
 #ifdef JURASSIC_DEBUG
       printf("%s\n", str);
@@ -683,9 +683,9 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
     /* float, to double */
     if (!PL_get_float(term, &num_float)) {
 #ifdef JURASSIC_DEBUG
-    printf("FAILD!\n");
+      printf("FAILD!\n");
 #endif
-    *ret = NULL;
+      *ret = NULL;
       return JURASSIC_FAIL;
     } else {
 #ifdef JURASSIC_DEBUG
@@ -809,9 +809,9 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
       PL_put_atom(tmp_term, ATOM_ninf);
     } else if (isnan(retval)) {
 #ifdef JURASSIC_DEBUG
-    printf("        NaN.\n");
+      printf("        NaN.\n");
 #endif
-    PL_put_atom(tmp_term, ATOM_nan);
+      PL_put_atom(tmp_term, ATOM_nan);
     } else if (!PL_put_float(tmp_term, retval))
       return JURASSIC_FAIL;
   } else if (jl_is_string(val)) {
@@ -842,7 +842,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
   } else if (jl_is_array(val)) {
     if (jl_array_ndims(val) == 1) {
 #ifdef JURASSIC_DEBUG
-    printf("[DEBUG] 1D Array:\n");
+      printf("[DEBUG] 1D Array:\n");
 #endif
       /* Construct a list */
       size_t len = jl_array_len(val);
@@ -1028,10 +1028,10 @@ foreign_t jl_send_command(term_t jl_expr) {
   jl_value_t *ret;
   if (!pl2jl(jl_expr, &ret, TRUE) || ret == NULL) {
     if (jl_exception_occurred()) {
-        jl_call2(jl_get_function(jl_base_module, "showerror"),
-                 jl_stderr_obj(),
-                 jl_exception_occurred());
-        jl_printf(jl_stderr_stream(), "\n");
+      jl_call2(jl_get_function(jl_base_module, "showerror"),
+               jl_stderr_obj(),
+               jl_exception_occurred());
+      jl_printf(jl_stderr_stream(), "\n");
     }
     PL_fail;
   }

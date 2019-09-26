@@ -30,6 +30,13 @@ static int halt_julia(int rc, void *p) {
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    static functions
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+static void jl_throw_exception() {
+  jl_call2(jl_get_function(jl_base_module, "showerror"),
+           jl_stderr_obj(),
+           jl_exception_occurred());
+  jl_printf(jl_stderr_stream(), "\n");
+}
+
 /* Julia source */
 static jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e) {
   jl_value_t *v = jl_get_global(m, e);
@@ -44,25 +51,34 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
   JL_GC_PUSHARGS(args, 3);
   args[1] = jl_toplevel_eval_in(m, x);
   args[2] = jl_toplevel_eval_in(m, f);
+#ifdef JURASSIC_DEBUG
+  jl_printf(JL_STDOUT, "        -- value: ");
+  jl_static_show(JL_STDOUT, args[1]);
+  jl_printf(JL_STDOUT, "\n");
+  jl_printf(JL_STDOUT, "        -- field: ");
+  jl_static_show(JL_STDOUT, args[2]);
+  jl_printf(JL_STDOUT, "\n");
+#endif
   if (jl_is_module(args[1])) {
     JL_TYPECHK(getfield, symbol, args[2]);
-    args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*) args[2]);
+    args[0] = jl_eval_global_var((jl_module_t*) args[1], (jl_sym_t*) args[2]);
   } else {
     args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
     size_t last_age = ptls->world_age;
     ptls->world_age = jl_get_world_counter();
-    args[0] = jl_apply(args, 3);
+    JL_TRY {
+      args[0] = jl_apply(args, 3);
+      jl_exception_clear();
+    } JL_CATCH {
+      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
+      JL_GC_POP();
+      return NULL;
+    }
     ptls->world_age = last_age;
   }
   JL_GC_POP();
   return args[0];
-}
-
-static void jl_throw_exception() {
-  jl_call2(jl_get_function(jl_base_module, "showerror"),
-           jl_stderr_obj(),
-           jl_exception_occurred());
-  jl_printf(jl_stderr_stream(), "\n");
 }
 
 /* The built-in function to initialise an expression */
@@ -228,8 +244,11 @@ static jl_value_t *jl_dot(const char *dotname) {
       strncpy(module, dotname, mod_len);
       module[mod_len] = '\0';
       /* QuoteNode(function) */
+      jl_value_t * mod = jl_dot(module);
+      if (!mod)
+        return NULL;
       return jl_eval_dot_expr(jl_main_module,
-                              jl_dot(module),
+                              mod,
                               jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();

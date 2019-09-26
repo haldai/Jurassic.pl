@@ -30,6 +30,7 @@ static int halt_julia(int rc, void *p) {
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    static functions
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Print Julia exceptions */
 static void jl_throw_exception() {
   jl_call2(jl_get_function(jl_base_module, "showerror"),
            jl_stderr_obj(),
@@ -37,7 +38,7 @@ static void jl_throw_exception() {
   jl_printf(jl_stderr_stream(), "\n");
 }
 
-/* Julia source */
+/* Adapted from Julia source */
 static jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e) {
   jl_value_t *v = jl_get_global(m, e);
   if (v == NULL)
@@ -45,6 +46,7 @@ static jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e) {
   return v;
 }
 
+/* Adapted from Julia source */
 static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f) {
   jl_ptls_t ptls = jl_get_ptls_states();
   jl_value_t **args;
@@ -81,7 +83,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
   return args[0];
 }
 
-/* The built-in function to initialise an expression */
+/* Adapted from Julia source */
 static jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) {
   jl_expr_t *ex;
   JL_TRY {
@@ -101,7 +103,7 @@ static jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) {
   return ex;
 }
 
-/* borrowed from real */
+/* Borrowed from real */
 static int list_length(term_t list) {
   term_t tail = PL_new_term_ref();
   size_t len = -1;
@@ -120,7 +122,8 @@ static int list_length(term_t list) {
   }
 }
 
-/* eval julia string (from julia/src/embedding.c) with checking */
+/* Evaluate Julia string (from julia/src/embedding.c) with checking,
+   return to a pre-assigned address */
 static int checked_eval_string(const char *code, jl_value_t **ret) {
   *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
@@ -135,7 +138,7 @@ static int checked_eval_string(const char *code, jl_value_t **ret) {
   assert(*ret && "Missing return value but no exception occurred!");
   return JURASSIC_SUCCESS;
 }
-
+/* Evaluate Julia string with return value */
 static jl_value_t * checked_send_command_str(const char *code) {
   jl_value_t *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
@@ -150,8 +153,8 @@ static jl_value_t * checked_send_command_str(const char *code) {
   return ret;
 }
 
-/* eval julia code without return */
-static void checked_jl_command(const char *code) {
+/* Evaluate Julia code without return */
+static int checked_jl_command(const char *code) {
   jl_eval_string(code);
   if (jl_exception_occurred()) {
     // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
@@ -159,15 +162,17 @@ static void checked_jl_command(const char *code) {
              jl_stderr_obj(),
              jl_exception_occurred());
     jl_printf(jl_stderr_stream(), "\n");
+    return JURASSIC_FAIL;
   }
+  return JURASSIC_SUCCESS;
 }
 
-/* check if a variable is defined in julia */
+/* Check if a variable (atom string) is defined in julia */
 static int jl_is_defined(const char *var) {
   return jl_get_global(jl_main_module, jl_symbol_lookup(var))!= NULL ? TRUE : FALSE;
 }
 
-/* get julia variable from string */
+/* Get julia variable from string */
 static int jl_access_var(const char *var, jl_value_t **ret) {
   if (jl_is_defined(var)) {
     JL_TRY {
@@ -185,7 +190,7 @@ static int jl_access_var(const char *var, jl_value_t **ret) {
   return JURASSIC_SUCCESS;
 }
 
-/* variable assignment */
+/* Variable assignment */
 static int jl_assign_var(const char *var, jl_value_t *val) {
   JL_TRY {
     jl_set_global(jl_main_module, jl_symbol_lookup(var), val);
@@ -198,7 +203,7 @@ static int jl_assign_var(const char *var, jl_value_t *val) {
   return JURASSIC_SUCCESS;
 }
 
-/* assign Julia expression arguments with Prolog list */
+/* Assign Julia expression arguments with Prolog list */
 static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t len) {
   term_t arg_term = PL_new_term_ref();
   term_t list_ = PL_copy_term_ref(list);
@@ -218,23 +223,25 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
         printf("[ERR] Convert term argument %lu failed!\n", i);
         return JURASSIC_FAIL;
       }
-      i++;
       jl_exprargset(*ex, i, a_i);
+      i++;
       jl_exception_clear();
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();
       jl_throw_exception();
+      return JURASSIC_FAIL;
     }
   }
   return JURASSIC_SUCCESS;
 }
 
-/* Process function name */
+/* Process 'A1.A2.A3' Atom */
 static jl_value_t *jl_dot(const char *dotname) {
   char *dot = strrchr(dotname, '.');
+  jl_value_t *re;
   if (dot == NULL || jl_is_operator((char *) dotname))
     /* no dot or is just operators ".+", ".*" ... */
-    return (jl_value_t *) jl_symbol(dotname);
+    re = (jl_value_t *) jl_symbol(dotname);
   else {
     /* if dotname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
     JL_TRY {
@@ -247,22 +254,22 @@ static jl_value_t *jl_dot(const char *dotname) {
       jl_value_t * mod = jl_dot(module);
       if (!mod)
         return NULL;
-      return jl_eval_dot_expr(jl_main_module,
-                              mod,
-                              jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
+      re = jl_eval_dot_expr(jl_main_module,
+                            mod,
+                            jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
     } JL_CATCH {
       jl_get_ptls_states()->previous_exception = jl_current_exception();
       jl_throw_exception();
       return NULL;
     }
   }
+  return re;
 }
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Dynamic functions
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-
-/* prolog expression to string */
+/* Prolog atoms to Julia values */
 int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
   const char *a = PL_atom_chars(atom);
   if (a == NULL) {
@@ -943,7 +950,7 @@ install_t install_jurassic(void) {
   PL_register_foreign("jl_using", 1, jl_using, 0);
   PL_register_foreign("jl_include", 1, jl_include, 0);
 
-  printf("Starting Julia ...");
+  printf("Initialise Embedded Julia ...");
 
   /* Loading julia library */
   void *handle;
@@ -976,6 +983,7 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
       PL_fail;
     }
     JL_GC_POP();
+    jl_exception_clear();
   } JL_CATCH {
     jl_get_ptls_states()->previous_exception = jl_current_exception();
     jl_throw_exception();
@@ -990,14 +998,9 @@ foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
   if (!PL_get_chars(jl_expr, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
-  jl_value_t *ret = jl_eval_string(expression);
-  if (jl_exception_occurred()) {
-    jl_call2(jl_get_function(jl_base_module, "showerror"),
-             jl_stderr_obj(),
-             jl_exception_occurred());
-    jl_printf(jl_stderr_stream(), "\n");
+  jl_value_t *ret = checked_send_command_str(expression);
+  if (!ret)
     PL_fail;
-  }
   JL_GC_PUSH1(&ret);
   if (!jl_unify_pl(ret, &pl_ret)) {
     JL_GC_POP();
@@ -1013,14 +1016,8 @@ foreign_t jl_send_command_str(term_t jl_expr) {
   if (!PL_get_chars(jl_expr, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
-  jl_eval_string(expression);
-  if (jl_exception_occurred()) {
-    jl_call2(jl_get_function(jl_base_module, "showerror"),
-             jl_stderr_obj(),
-             jl_exception_occurred());
-    jl_printf(jl_stderr_stream(), "\n");
+  if (!checked_jl_command(expression))
     PL_fail;
-  }
   PL_succeed;
 }
 
@@ -1050,14 +1047,8 @@ foreign_t jl_using(term_t term) {
     PL_fail;
   char cmd[BUFFSIZE];
   sprintf(cmd, "using %s", module);
-  checked_jl_command(cmd);
-  if (jl_exception_occurred()) {
-    jl_call2(jl_get_function(jl_base_module, "showerror"),
-             jl_stderr_obj(),
-             jl_exception_occurred());
-    jl_printf(jl_stderr_stream(), "\n");
+  if (!checked_jl_command(cmd))
     PL_fail;
-  }
   PL_succeed;
 }
 
@@ -1069,12 +1060,7 @@ foreign_t jl_include(term_t term) {
     PL_fail;
   char cmd[BUFFSIZE];
   sprintf(cmd, "include(%s)", file);
-  if (jl_exception_occurred()) {
-    jl_call2(jl_get_function(jl_base_module, "showerror"),
-             jl_stderr_obj(),
-             jl_exception_occurred());
-    jl_printf(jl_stderr_stream(), "\n");
+  if (!checked_jl_command(cmd))
     PL_fail;
-  }
   PL_succeed;
 }

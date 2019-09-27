@@ -420,14 +420,16 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       return NULL;
     }
     jl_expr_t *ex = jl_exprn(jl_symbol("macrocall"), arity + 2);
-    jl_expr_t *ex_arg = compound_to_jl_expr(arg);
-    JL_GC_PUSH1(&ex_arg);
+    JL_GC_PUSH1(&ex);
     jl_value_t *func = jl_dot(fname);
-    if (!func || !ex_arg)
+    if (!func)
       return NULL;
     jl_exprargset(ex, 0, func);
     jl_exprargset(ex, 1, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing));
-    jl_exprargset(ex, 2, ex_arg);
+    if (!jl_set_args(&ex, expr, arity, 2, 1)) {
+      JL_GC_POP();
+      return NULL;
+    }
 #ifdef JURASSIC_DEBUG
     jl_static_show(JL_STDOUT, (jl_value_t *) ex);
     jl_printf(JL_STDOUT, "\n");

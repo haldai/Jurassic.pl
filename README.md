@@ -319,6 +319,8 @@ true.
 # TODO
 More features to be added, e.g.:
 
+- [Anonymous
+  functions](https://docs.julialang.org/en/v1/manual/functions/#man-anonymous-functions-1);
 - Multi-dimension arrays;
 - Multi-threading.
 

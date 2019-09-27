@@ -509,7 +509,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       if ( strchr(fname, '=') != NULL ||
            strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ||
-           strcmp(fname, "...") == 0) {
+           strcmp(fname, "...") == 0 ||
+           strcmp(fname, "->") == 0) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
@@ -1072,9 +1073,13 @@ foreign_t jl_include(term_t term) {
   if (!PL_get_chars(term, &file,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
-  char cmd[BUFFSIZE];
-  sprintf(cmd, "include(%s)", file);
-  if (!checked_jl_command(cmd))
+  JL_TRY {
+    jl_load(jl_main_module, file);
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
     PL_fail;
+  }
   PL_succeed;
 }

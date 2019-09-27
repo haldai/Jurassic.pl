@@ -300,6 +300,22 @@ Plotted image:
 
 ![plot](rand10.png)
 
+Spreads arguments with `...`:
+
+``` prolog
+?- := foo(x,y,z) = sum([x,y,z]).
+true.
+
+?- := foo([1,2,3]).
+MethodError: no method matching foo(::^PArray{Int64,1})
+Closest candidates are:
+  foo(::Any, !Matched::Any, !Matched::Any) at none:0
+false.
+
+?- := foo([1,2,3]...).
+true.
+```
+
 # TODO
 More features to be added, e.g.:
 

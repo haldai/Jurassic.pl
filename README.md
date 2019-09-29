@@ -227,6 +227,20 @@ Y = 12.830663096236986 ;
 ...
 ```
 
+The unification from Julia side will first try to access the value of Julia
+symbol if it is defined variable; if failed, treat the symbol name as an atom:
+
+``` prolog
+?- a := 1,
+   X := a,
+   b := X + 1,
+   Y := b,
+   Z := c.
+X = 1,
+Y = 2,
+Z = c.
+```
+
 Currently, the unification only works for 1d-arrays:
 
 ``` prolog

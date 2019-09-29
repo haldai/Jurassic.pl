@@ -856,11 +856,18 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
     printf("%s.\n", retval);
 #endif
-    if (jl_is_defined(retval)) {
+    if (strchr(retval, '.') != NULL) {
+      if (!jl_unify_pl(jl_dot(retval), &tmp_term))
+        return JURASSIC_FAIL;
+    } else if (jl_is_defined(retval)) {
+#ifdef JURASSIC_DEBUG
+      printf("--- is defined.\n");
+#endif
       jl_value_t *var_val;
       if (!jl_access_var(retval, &var_val))
         return JURASSIC_FAIL;
-      return jl_unify_pl(var_val, &tmp_term);
+      if (!jl_unify_pl(var_val, &tmp_term))
+        return JURASSIC_FAIL;
     } else if (!PL_put_atom_chars(tmp_term, retval))
       return JURASSIC_FAIL;
   } else if (jl_is_array(val)) {
@@ -989,12 +996,12 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
   JL_TRY {
     if (!pl2jl(jl_expr, &ret, TRUE))
       PL_fail;
+    JL_GC_PUSH1(&ret);
 #ifdef JURASSIC_DEBUG
     printf("[DEBUG] Evaluated result:\n");
     jl_static_show(JL_STDOUT, ret);
     jl_printf(JL_STDOUT, "\n");
 #endif
-    JL_GC_PUSH1(&ret);
     if (!jl_unify_pl(ret, &pl_ret)) {
       JL_GC_POP();
       PL_fail;

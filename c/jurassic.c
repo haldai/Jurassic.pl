@@ -508,7 +508,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       return ex;
     } else {
       /* initialise an expression without using :call */
-      if ( strchr(fname, '=') != NULL ||
+      if ( strcmp(fname, "=") == 0 ||
            strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ||
            strcmp(fname, "...") == 0 ||
@@ -1060,7 +1060,19 @@ foreign_t jl_send_command(term_t jl_expr) {
   jl_static_show(JL_STDOUT, ret);
   jl_printf(JL_STDOUT, "\n");
 #endif
-  PL_succeed;
+  JL_GC_PUSH1(&ret);
+  if (jl_is_bool(ret)) {
+    if (jl_unbox_bool(ret)) {
+      JL_GC_POP();
+      PL_succeed;
+    } else {
+      JL_GC_POP();
+      PL_fail;
+    }
+  } else {
+    JL_GC_POP();
+    PL_succeed;
+  }
 }
 
 /* using a julia module */

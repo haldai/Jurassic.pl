@@ -336,6 +336,7 @@ More features to be added, e.g.:
 - [Anonymous
   functions](https://docs.julialang.org/en/v1/manual/functions/#man-anonymous-functions-1);
 - Multi-dimension arrays;
+- Use DCG to parse Prolog expressions as Julia expressions;
 - Multi-threading.
 
 Compile and test code in other platform, e.g.:

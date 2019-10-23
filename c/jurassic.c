@@ -439,7 +439,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     JL_GC_POP();
     return ex;
-  } else if (strcmp(fname, "[]") == 0) {
+  } else if (strcmp(fname, "[]") == 0 || strcmp(fname, "{}") == 0) {
     /* reference in array */
     /* term like a[i,j] =.. [[], [i,j], a]. use :ref function */
     term_t collection = PL_new_term_ref();
@@ -454,7 +454,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     /* use :ref as head, list members as arguments */
     /* a[1,2,3] =.. (:ref, :a, 1, 2, 3)*/
-    jl_expr_t *ex = jl_exprn(jl_symbol("ref"), len+1);
+    jl_expr_t *ex = strcmp(fname, "[]") == 0 ?
+      jl_exprn(jl_symbol("ref"), len+1) : jl_exprn(jl_symbol("curly"), len+1);
     JL_GC_PUSH1(&ex);
     jl_exprargset(ex, 0, compound_to_jl_expr(collection)); /* first argument is the collection */
     /* following arguments are references */

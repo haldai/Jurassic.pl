@@ -5,10 +5,13 @@
                      jl_send_command_str/1,
                      jl_eval/2,
                      jl_eval_str/2,
+                     jl_tuple_unify_str/2,
+                     jl_tuple_unify/2,
                      ':='/1,
                      ':='/2,
                      op(950, fx, :=),
                      op(950, yfx, :=),
+                     op(900, yfx, ->>),
                      op(700, yfx, (+=)),
                      op(700, yfx, (-=)),
                      op(700, yfx, (*=)),
@@ -18,10 +21,12 @@
                      op(400, xfy, .*),
                      op(400, xfy, ./),
                      op(200, xfy, .^),
-                     op(200, fx, @),
-                     op(200, fx, :),
+                     op(100, xfy, ::),
                      op(100, yf, []),
-                     op(100, yf, ...)
+                     op(100, xf, {}),
+                     op(90, yf, ...),
+                     op(50, fx, @),
+                     op(50, fx, :)
                     ]).
 
 /* Unary */
@@ -40,10 +45,6 @@
 ':='(Y, X) :-
     jl_eval(X, Y).
 
-%%	expand_dotted_name(+TermIn, -TermOut) is det.
-%%
-%%	Translate Atom1.Atom2 and Atom.Compound   into 'Atom1.Atom2' and
-%%	'Atom1.Name'(Args).
 expand_dotted_name(TermIn, TermOut) :-
     compound(TermIn), !,
     (   join_dot(TermIn, Out)
@@ -56,35 +57,18 @@ expand_dotted_name(TermIn, TermOut) :-
     ).
 expand_dotted_name(Term, Term).
 
-join_dot(In, Out) :-
-	compound_name_arguments(In, '.', [A,B]),
-	atom(A),
-	(   atom(B)
-	->  atomic_list_concat([A,'.',B], Out)
-	;   compound(B)
-	->  compound_name_arguments(B, Name, Args),
-	    atomic_list_concat([A,'.',Name], Name2),
-	    compound_name_arguments(Out, Name2, Args)
-	;   Out = In
-	).
+join_dot(In, jl_field(A, B)) :-
+	compound_name_arguments(In, '.', [A,B]).
 
 contains_dot(Term) :-
-	compound(Term),
-	(   compound_name_arity(Term, '.', 2)
-	->  true
-	;   arg(_, Term, Arg),
-	    contains_dot(Arg)
-	->  true
-	).
+    compound(Term),
+    (   compound_name_arity(Term, '.', 2)
+    ->  true
+    ;   arg(_, Term, Arg),
+        contains_dot(Arg)
+    ->  true
+    ).
 
-user:goal_expansion(In, Out) :-
-	contains_dot(In), !,
-	expand_dotted_name(In, Out).
-
-%%  expand '@' macros
-%%	expand_macro_name(+TermIn, -TermOut) is det.
-%%
-%%	Translate @Atom1 into '@Atom1'(Args).
 expand_macro_name(TermIn, TermOut) :-
     compound(TermIn), !,
     (   join_at(TermIn, Out)
@@ -97,14 +81,8 @@ expand_macro_name(TermIn, TermOut) :-
     ).
 expand_macro_name(Term, Term).
 
-join_at(In, Out) :-
-	compound_name_arguments(In, '@', [A]),
-    (   compound(A)
-    ->  compound_name_arguments(A, Name, Args),  
-        atomic_list_concat(['@', Name], Name2),
-        compound_name_arguments(Out, Name2, Args)
-    ;   Out = In   
-    ).
+join_at(In, jl_macro(A)) :-
+	compound_name_arguments(In, '@', [A]).
 
 contains_at(Term) :-
 	compound(Term),
@@ -114,10 +92,6 @@ contains_at(Term) :-
 	    contains_at(Arg)
 	->  true
 	).
-
-user:goal_expansion(In, Out) :-
-	contains_at(In), !,
-	expand_macro_name(In, Out).
 
 expand_symb_name(TermIn, TermOut) :-
     compound(TermIn), !,
@@ -131,14 +105,8 @@ expand_symb_name(TermIn, TermOut) :-
     ).
 expand_symb_name(Term, Term).
 
-join_colon(In, Out) :-
-	compound_name_arguments(In, ':', [A]),
-    (   compound(A)
-    ->  compound_name_arguments(A, Name, Args),  
-        atomic_list_concat([':', Name], Name2),
-        compound_name_arguments(Out, Name2, Args)
-    ;   Out = In
-    ).
+join_colon(In, jl_symb(A)) :-
+	compound_name_arguments(In, ':', [A]).
 
 contains_colon(Term) :-
 	compound(Term),
@@ -149,6 +117,20 @@ contains_colon(Term) :-
 	->  true
 	).
 
+
+user:term_expansion((A ->> B), jl_inline(A, B)) :- !.
+user:term_expansion(array:{Type, Dim}:(Init, Size), jl_new_array(Type, Dim, Init, [Size])) :-
+    julia_type(Type), !.
+
+user:goal_expansion(tuple(List) := Expr, jl_tuple_unify_str(List, Expr)) :-
+    string(Expr), !.
+user:goal_expansion(tuple(List) := Expr, jl_tuple_unify(List, Expr)) :- !.
+user:goal_expansion(In, Out) :-
+    contains_dot(In), !,
+    expand_dotted_name(In, Out).
+user:goal_expansion(In, Out) :-
+	contains_at(In), !,
+	expand_macro_name(In, Out).
 user:goal_expansion(In, Out) :-
 	contains_colon(In), !,
 	expand_symb_name(In, Out).

@@ -56,6 +56,19 @@ true.
 true.
 ```
 
+Find out if an atom has been defined in the embedded Julia:
+
+``` prolog
+?- jl_isdefined(a).
+false.
+
+?- a := 1.
+true.
+
+?- jl_isdefined(a).
+true.
+```
+
 ## Julia Functions
 Define a function and call a Julia macro:
 

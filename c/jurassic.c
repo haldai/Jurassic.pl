@@ -169,7 +169,7 @@ static int checked_jl_command(const char *code) {
 
 /* Check if a variable (atom string) is defined in julia */
 static int jl_is_defined(const char *var) {
-  return jl_get_global(jl_main_module, jl_symbol_lookup(var))!= NULL ? TRUE : FALSE;
+  return jl_get_global(jl_main_module, jl_symbol_lookup(var)) != NULL ? TRUE : FALSE;
 }
 
 /* Get julia variable from string */
@@ -969,8 +969,11 @@ install_t install_jurassic(void) {
   /* Registration */
   PL_register_foreign("jl_eval_str", 2, jl_eval_str, 0);
   PL_register_foreign("jl_eval", 2, jl_eval, 0);
+  PL_register_foreign("jl_tuple_unify_str", 2, jl_tuple_unify_str, 0);
+  PL_register_foreign("jl_tuple_unify", 2, jl_tuple_unify, 0);
   PL_register_foreign("jl_send_command_str", 1, jl_send_command_str, 0);
   PL_register_foreign("jl_send_command", 1, jl_send_command, 0);
+  PL_register_foreign("jl_isdefined", 1, jl_isdefined, 0);
   PL_register_foreign("jl_using", 1, jl_using, 0);
   PL_register_foreign("jl_include", 1, jl_include, 0);
 
@@ -1034,6 +1037,15 @@ foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
   PL_succeed;
 }
 
+/* TODO: unify prolog tuple([A|B]) with julia functions that returns a tuple */
+foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr) {
+  return jl_eval(jl_expr, pl_tuple);
+}
+
+foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str) {
+  return jl_eval_str(jl_expr_str, pl_tuple);
+}
+
 /* evaluate string without returning value */
 foreign_t jl_send_command_str(term_t jl_expr) {
   char * expression;
@@ -1073,6 +1085,17 @@ foreign_t jl_send_command(term_t jl_expr) {
     JL_GC_POP();
     PL_succeed;
   }
+}
+
+/* test if an atom is defined as julia variable */
+foreign_t jl_isdefined(term_t jl_expr) {
+  char * expression;
+  if (!PL_get_chars(jl_expr, &expression,
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+    PL_fail;
+  if (!jl_is_defined(expression))
+    PL_fail;
+  PL_succeed;
 }
 
 /* using a julia module */

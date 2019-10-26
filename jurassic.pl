@@ -45,7 +45,10 @@
 ':='(Y, X) :-
     jl_eval(X, Y).
 
-expand_dotted_name(TermIn, TermOut) :-
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ Syntax
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+    expand_dotted_name(TermIn, TermOut) :-
     compound(TermIn), !,
     (   join_dot(TermIn, Out)
     ->  TermOut = Out
@@ -117,14 +120,15 @@ contains_colon(Term) :-
 	->  true
 	).
 
-
 user:term_expansion((A ->> B), jl_inline(A, B)) :- !.
 user:term_expansion(array:{Type, Dim}:(Init, Size), jl_new_array(Type, Dim, Init, [Size])) :-
     julia_type(Type), !.
 
+/*
 user:goal_expansion(tuple(List) := Expr, jl_tuple_unify_str(List, Expr)) :-
     string(Expr), !.
 user:goal_expansion(tuple(List) := Expr, jl_tuple_unify(List, Expr)) :- !.
+*/
 user:goal_expansion(In, Out) :-
     contains_dot(In), !,
     expand_dotted_name(In, Out).

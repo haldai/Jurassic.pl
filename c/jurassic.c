@@ -946,6 +946,22 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
   }
   return JURASSIC_SUCCESS;
 }
+
+/* TODO tuple? array? */
+static int jl_ref_unify(term_t * pl_term, jl_value_t * val, size_t idx) {
+  jl_value_t * v = jl_arrayref((jl_array_t *)val, idx); // TODO test if it works both for tuple and array?
+  if (!PL_is_atom(*pl_term) && PL_is_ground(*pl_term)) {
+    // assignment
+      char * atom;
+      if (!PL_get_chars(*pl_term, &atom,
+                        CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+        PL_fail;
+      return jl_assign_var(atom, v);
+  } else
+    return jl_unify_pl(v, pl_term);
+  return JURASSIC_FAIL;
+}
+
 /*******************************
  *          registers          *
  *******************************/

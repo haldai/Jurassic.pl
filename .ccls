@@ -1,0 +1,8 @@
+%c -std=gnu99
+
+-I/usr/include
+-I/usr/local/include
+-I/usr/local/lib/swipl/include
+-I/home/daiwz/Projects/julia/usr/include/julia/
+-I/opt/Projects/julia/usr/include/julia/
+-I.

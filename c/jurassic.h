@@ -36,8 +36,11 @@ int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size
 install_t install_jurassic(void);
 foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret);
 foreign_t jl_eval(term_t jl_expr, term_t pl_ret);
+foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr);
+foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str);
 foreign_t jl_send_command_str(term_t jl_expr);
 foreign_t jl_send_command(term_t jl_expr);
+foreign_t jl_isdefined(term_t jl_expr);
 foreign_t jl_using(term_t term);
 foreign_t jl_include(term_t term);
 

@@ -5,11 +5,13 @@
                      jl_send_command_str/1,
                      jl_eval/2,
                      jl_eval_str/2,
+                     jl_tuple_unify_str/2,
+                     jl_tuple_unify/2,
                      ':='/1,
                      ':='/2,
                      op(950, fx, :=),
                      op(950, yfx, :=),
-                     op(750, xfy, (->)),
+                     op(900, yfx, ->>),
                      op(700, yfx, (+=)),
                      op(700, yfx, (-=)),
                      op(700, yfx, (*=)),
@@ -19,11 +21,12 @@
                      op(400, xfy, .*),
                      op(400, xfy, ./),
                      op(200, xfy, .^),
-                     op(200, fx, @),
-                     op(200, fx, :),
-                     op(200, yf, []),
-                     op(200, yf, {}),
-                     op(100, yf, ...)
+                     op(100, xfy, ::),
+                     op(100, yf, []),
+                     op(100, xf, {}),
+                     op(90, yf, ...),
+                     op(50, fx, @),
+                     op(50, fx, :)
                     ]).
 
 /* Unary */
@@ -33,20 +36,21 @@
 ':='(X) :-
     jl_send_command(X).
 /* Binary */
+':='(tuple(Y), X) :-
+    jl_tuple_unify(tuple(Y), X), !.
 ':='(Y, X) :-
     ground(Y), !,
     := Y = X.
-':='(Y, X) :-
+':='(Y, str(X)) :-
     string(X), !,
     jl_eval_str(X, Y).
 ':='(Y, X) :-
     jl_eval(X, Y).
 
-%%	expand_dotted_name(+TermIn, -TermOut) is det.
-%%
-%%	Translate Atom1.Atom2 and Atom.Compound   into 'Atom1.Atom2' and
-%%	'Atom1.Name'(Args).
-expand_dotted_name(TermIn, TermOut) :-
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ Syntax
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+    expand_dotted_name(TermIn, TermOut) :-
     compound(TermIn), !,
     (   join_dot(TermIn, Out)
     ->  TermOut = Out
@@ -58,35 +62,18 @@ expand_dotted_name(TermIn, TermOut) :-
     ).
 expand_dotted_name(Term, Term).
 
-join_dot(In, Out) :-
-	compound_name_arguments(In, '.', [A,B]),
-	atom(A),
-	(   atom(B)
-	->  atomic_list_concat([A,'.',B], Out)
-	;   compound(B)
-	->  compound_name_arguments(B, Name, Args),
-	    atomic_list_concat([A,'.',Name], Name2),
-	    compound_name_arguments(Out, Name2, Args)
-	;   Out = In
-	).
+join_dot(In, jl_field(A, :B)) :- % the second argument should be quotenode
+	compound_name_arguments(In, '.', [A,B]).
 
 contains_dot(Term) :-
-	compound(Term),
-	(   compound_name_arity(Term, '.', 2)
-	->  true
-	;   arg(_, Term, Arg),
-	    contains_dot(Arg)
-	->  true
-	).
+    compound(Term),
+    (   compound_name_arity(Term, '.', 2)
+    ->  true
+    ;   arg(_, Term, Arg),
+        contains_dot(Arg)
+    ->  true
+    ).
 
-user:goal_expansion(In, Out) :-
-	contains_dot(In), !,
-	expand_dotted_name(In, Out).
-
-%%  expand '@' macros
-%%	expand_macro_name(+TermIn, -TermOut) is det.
-%%
-%%	Translate @Atom1 into '@Atom1'(Args).
 expand_macro_name(TermIn, TermOut) :-
     compound(TermIn), !,
     (   join_at(TermIn, Out)
@@ -99,14 +86,8 @@ expand_macro_name(TermIn, TermOut) :-
     ).
 expand_macro_name(Term, Term).
 
-join_at(In, Out) :-
-	compound_name_arguments(In, '@', [A]),
-    (   compound(A)
-    ->  compound_name_arguments(A, Name, Args),  
-        atomic_list_concat(['@', Name], Name2),
-        compound_name_arguments(Out, Name2, Args)
-    ;   Out = In   
-    ).
+join_at(In, jl_macro(A)) :-
+	compound_name_arguments(In, '@', [A]).
 
 contains_at(Term) :-
 	compound(Term),
@@ -117,42 +98,26 @@ contains_at(Term) :-
 	->  true
 	).
 
+%% Turn list to tuple
+list_tuple([A], (A)). 
+list_tuple([A,B|L], (A,R)) :-
+    list_tuple([B|L], R).
+
+jl_new_array(Name, Type, Dim) :-
+    swritef(Str, '%w = Array{%w, %w}()', [Name, Type, Dim]),
+    := Str.
+jl_new_array(Name, Type, Init, Size) :-
+    length(Size, Dim),
+    list_tuple(Size, Size_Tuple),
+    swritef(Str, '%w = Array{%w, %w}(%w, %w)', [Name, Type, Dim, Init, Size_Tuple]),
+    := Str.
+
+user:goal_expansion(In, Out) :-
+    contains_dot(In), !,
+    expand_dotted_name(In, Out).
 user:goal_expansion(In, Out) :-
 	contains_at(In), !,
 	expand_macro_name(In, Out).
-
-expand_symb_name(TermIn, TermOut) :-
-    compound(TermIn), !,
-    (   join_colon(TermIn, Out)
-    ->  TermOut = Out
-    ;   contains_at(TermIn)
-    ->  compound_name_arguments(TermIn, Name, ArgsIn),
-        maplist(expand_symb_name, ArgsIn, ArgsOut),
-        compound_name_arguments(TermOut, Name, ArgsOut)
-    ;   TermOut = TermIn
-    ).
-expand_symb_name(Term, Term).
-
-join_colon(In, Out) :-
-	compound_name_arguments(In, ':', [A]),
-    (   compound(A)
-    ->  compound_name_arguments(A, Name, Args),  
-        atomic_list_concat([':', Name], Name2),
-        compound_name_arguments(Out, Name2, Args)
-    ;   Out = In
-    ).
-
-contains_colon(Term) :-
-	compound(Term),
-	(   compound_name_arity(Term, ':', 1)
-	->  true
-	;   arg(_, Term, Arg),
-	    contains_at(Arg)
-	->  true
-	).
-
-user:goal_expansion(In, Out) :-
-	contains_colon(In), !,
-	expand_symb_name(In, Out).
+user:goal_expansion((A ->> B), jl_inline(A, B)) :- !.
 
 :- load_foreign_library("lib/jurassic.so").

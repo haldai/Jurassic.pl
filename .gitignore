@@ -232,6 +232,4 @@ Manifest.toml
 test
 
 # ccls cache dir
-*ccls
-.ccls
 .ccls-cache/

@@ -6,8 +6,10 @@
 
 /* atoms for julia expressions */
 static functor_t FUNCTOR_dot2; /* subfields */
-static functor_t FUNCTOR_at1; /* macro */
-static functor_t FUNCTOR_colon1; /* for julia variable (and symbols) */
+static functor_t FUNCTOR_cmd1; /* julia command string */
+static functor_t FUNCTOR_symb1;  /* symbol */
+static functor_t FUNCTOR_field2; /* var.field */
+static functor_t FUNCTOR_macro1; /* macro */
 static functor_t FUNCTOR_tuple1; /* use tuple/1 to represent julia tuple */
 static functor_t FUNCTOR_equal2; /* assignment */
 static functor_t FUNCTOR_plusequal2; /* += */
@@ -251,7 +253,7 @@ static jl_value_t *jl_dot(const char *dotname) {
       strncpy(module, dotname, mod_len);
       module[mod_len] = '\0';
       /* QuoteNode(function) */
-      jl_value_t * mod = jl_dot(module);
+      jl_value_t *mod = jl_dot(module);
       if (!mod)
         return NULL;
       re = jl_eval_dot_expr(jl_main_module,
@@ -400,6 +402,44 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
   if (fname == NULL || strlen(fname) == 0) {
     printf("[ERR] Read functor name failed!\n");
     return NULL;
+  } else if (PL_is_functor(expr, FUNCTOR_field2) && arity == 2) {
+#ifdef JURASSIC_DEBUG
+    printf("        Field of variable:\n");
+#endif
+    jl_expr_t *ex = jl_exprn((jl_sym_t *) jl_symbol("."), arity);
+    JL_GC_PUSH1(&ex);
+    /* assign the two arguments */
+    if (!jl_set_args(&ex, expr, arity, 0, 1)) {
+      JL_GC_POP();
+      return NULL;
+    }
+#ifdef JURASSIC_DEBUG
+    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
+    jl_printf(JL_STDOUT, "\n");
+#endif
+    JL_GC_POP();
+    return ex;
+  } else if (PL_is_functor(expr, FUNCTOR_cmd1) && arity < 2) {
+    term_t cmd = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, cmd)) {
+      printf("[ERR] Cannot access command term!\n");
+      return NULL;
+    }
+    if (!PL_is_string(cmd)) {
+      printf("[ERR] Command should be a string!\n");
+      return NULL;
+    }
+    char *cmd_str;
+    if (!PL_get_chars(cmd, &cmd_str,
+                      CVT_ATOM | CVT_STRING | CVT_EXCEPTION | BUF_DISCARDABLE |
+                      REP_UTF8)) {
+      printf("[ERR] Reading command string failed!\n");
+      return NULL;
+    }
+#ifdef JURASSIC_DEBUG
+    printf("        Command string: %s.\n", cmd_str);
+#endif
+    return (jl_expr_t *) checked_send_command_str(cmd_str);
   } else if (fname[0] == ':' && arity < 2) {
     char *sym_str;
     if (!PL_get_chars(expr, &sym_str,
@@ -409,24 +449,43 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     printf("        Symbol (QuoteNode): %s.\n", sym_str);
 #endif
     return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(++sym_str));
-  } else if (fname[0] == '@') {
+  } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */
+    term_t macro_call = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, macro_call)) {
+      printf("[ERR] Cannot access macro calling term!\n");
+      return NULL;
+    }
+    atom_t macro;
+    size_t macro_arity;
+    if (!PL_get_compound_name_arity_sz(macro_call, &macro, &macro_arity)) {
 #ifdef JURASSIC_DEBUG
-    printf("        Macro: %s/%lu.\n", fname, arity);
+      printf("[DEBUG] Cannot analyse macro call!\n");
+#endif
+      return NULL;
+    }
+    const char *macro_name_ = PL_atom_chars(macro);
+    char *macro_name = (char *) calloc(1 + strlen(macro_name_) + 1, sizeof(char));
+    strcpy(macro_name, "@");
+      strcat(macro_name, macro_name_);
+#ifdef JURASSIC_DEBUG
+    printf("        Macro: %s/%lu.\n", macro_name, macro_arity);
 #endif
     term_t arg = PL_new_term_ref();
-    if (!PL_get_arg(1, expr, arg)) {
+    if (!PL_get_arg(1, macro_call, arg)) {
       printf("[ERR] Cannot access macro argument!\n");
+      free(macro_name);
       return NULL;
     }
     jl_expr_t *ex = jl_exprn(jl_symbol("macrocall"), arity + 2);
     JL_GC_PUSH1(&ex);
-    jl_value_t *func = jl_dot(fname);
+    jl_value_t *func = jl_dot(macro_name);
+    free(macro_name); // free calloc
     if (!func)
       return NULL;
     jl_exprargset(ex, 0, func);
     jl_exprargset(ex, 1, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing));
-    if (!jl_set_args(&ex, expr, arity, 2, 1)) {
+    if (!jl_set_args(&ex, macro_call, arity, 2, 1)) {
       JL_GC_POP();
       return NULL;
     }
@@ -948,9 +1007,15 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 }
 
 /* TODO tuple? array? */
-static int jl_ref_unify(term_t * pl_term, jl_value_t * val, size_t idx) {
-  jl_value_t * v = jl_arrayref((jl_array_t *)val, idx); // TODO test if it works both for tuple and array?
-  if (!PL_is_atom(*pl_term) && PL_is_ground(*pl_term)) {
+static int jl_tuple_ref_unify(term_t * pl_term, jl_value_t * val, size_t idx) {
+  size_t n = jl_nfields(val);
+  jl_value_t * v = jl_get_nth_field_checked(val, idx);
+#ifdef JURASSIC_DEBUG
+  jl_printf(JL_STDOUT, "[DEBUG] item: %lu/%lu\n", idx, n);
+  jl_static_show(JL_STDOUT, (jl_value_t *) v);
+  jl_printf(JL_STDOUT, "\n");
+#endif
+  if (PL_is_atom(*pl_term) && PL_is_ground(*pl_term)) {
     // assignment
       char * atom;
       if (!PL_get_chars(*pl_term, &atom,
@@ -960,6 +1025,40 @@ static int jl_ref_unify(term_t * pl_term, jl_value_t * val, size_t idx) {
   } else
     return jl_unify_pl(v, pl_term);
   return JURASSIC_FAIL;
+}
+
+/* TODO: unify prolog tuple([A|B]) with julia functions that returns a tuple */
+static int jl_tuple_unify_all(term_t * pl_tuple, jl_value_t * val) {
+  if (PL_is_functor(*pl_tuple, FUNCTOR_tuple1)) {
+    term_t list = PL_new_term_ref();
+    if (!PL_get_arg(1, *pl_tuple, list)) {
+      printf("[ERR] Cannot access tuple arguments!\n");
+      return JURASSIC_FAIL;
+    }
+    if (!jl_is_tuple(val)) {
+#ifdef JURASSIC_DEBUG
+      printf("        Julia expression doesn't return tuple.\n");
+#endif
+      return JURASSIC_FAIL;
+    }
+    size_t len = list_length(list);
+#ifdef JURASSIC_DEBUG
+    printf("        Unify tuple/%lu.\n", len);
+    jl_printf(JL_STDOUT, "[DEBUG] Tuple value:\n");
+    jl_static_show(JL_STDOUT, (jl_value_t *) val);
+    jl_printf(JL_STDOUT, "\n");
+#endif
+    size_t i = 0;
+    term_t head = PL_new_term_ref();
+    term_t l = PL_copy_term_ref(list);
+    while (PL_get_list(l, head, l)) {
+      if (!jl_tuple_ref_unify(&head, val, i))
+        return JURASSIC_FAIL;
+      i++;
+    }
+    return JURASSIC_SUCCESS;
+  } else
+    return JURASSIC_FAIL;
 }
 
 /*******************************
@@ -974,8 +1073,11 @@ install_t install_jurassic(void) {
   ATOM_inf = PL_new_atom("inf");
   ATOM_ninf = PL_new_atom("ninf");
   FUNCTOR_dot2 = PL_new_functor(ATOM_dot, 2);
-  FUNCTOR_colon1 = PL_new_functor(PL_new_atom(":"), 1);
+  FUNCTOR_symb1 = PL_new_functor(PL_new_atom("jl_symb"), 1);
+  FUNCTOR_cmd1 = PL_new_functor(PL_new_atom("cmd"), 1);
+  FUNCTOR_field2 = PL_new_functor(PL_new_atom("jl_field"), 2);
   FUNCTOR_tuple1 = PL_new_functor(PL_new_atom("tuple"), 1);
+  FUNCTOR_macro1 = PL_new_functor(PL_new_atom("jl_macro"), 1);
   FUNCTOR_equal2 = PL_new_functor(PL_new_atom("="), 2);
   FUNCTOR_plusequal2 = PL_new_functor(PL_new_atom("+="), 2);
   FUNCTOR_minusqual2 = PL_new_functor(PL_new_atom("-="), 2);
@@ -1041,25 +1143,50 @@ foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
   if (!PL_get_chars(jl_expr, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
-  jl_value_t *ret = checked_send_command_str(expression);
-  if (!ret)
+  jl_value_t *ret;
+  if (!checked_eval_string(expression, &ret))
     PL_fail;
   JL_GC_PUSH1(&ret);
   if (!jl_unify_pl(ret, &pl_ret)) {
     JL_GC_POP();
     PL_fail;
+  } else {
+    JL_GC_POP();
+    PL_succeed;
   }
-  JL_GC_POP();
-  PL_succeed;
 }
 
-/* TODO: unify prolog tuple([A|B]) with julia functions that returns a tuple */
+/* unify prolog tuple([A|B]) with julia functions that returns a tuple */
 foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr) {
-  return jl_eval(jl_expr, pl_tuple);
+  jl_value_t * val;
+  if (!pl2jl(jl_expr, &val, TRUE))
+    PL_fail;
+  JL_GC_PUSH1(&val);
+  if (!jl_tuple_unify_all(&pl_tuple, val)) {
+    JL_GC_POP();
+    PL_fail;
+  } else {
+    JL_GC_POP();
+    PL_succeed;
+  }
 }
 
 foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str) {
-  return jl_eval_str(jl_expr_str, pl_tuple);
+  char * expression;
+  if (!PL_get_chars(jl_expr_str, &expression,
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+    PL_fail;
+  jl_value_t * val;
+  if (!checked_eval_string(expression, &val))
+    PL_fail;
+  JL_GC_PUSH1(&val);
+  if (!jl_tuple_unify_all(&pl_tuple, val)) {
+    JL_GC_POP();
+    PL_fail;
+  } else {
+    JL_GC_POP();
+    PL_succeed;
+  }
 }
 
 /* evaluate string without returning value */

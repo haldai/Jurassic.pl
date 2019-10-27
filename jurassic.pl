@@ -36,10 +36,12 @@
 ':='(X) :-
     jl_send_command(X).
 /* Binary */
+':='(tuple(Y), X) :-
+    jl_tuple_unify(tuple(Y), X), !.
 ':='(Y, X) :-
     ground(Y), !,
     := Y = X.
-':='(Y, X) :-
+':='(Y, str(X)) :-
     string(X), !,
     jl_eval_str(X, Y).
 ':='(Y, X) :-
@@ -60,7 +62,7 @@
     ).
 expand_dotted_name(Term, Term).
 
-join_dot(In, jl_field(A, B)) :-
+join_dot(In, jl_field(A, :B)) :- % the second argument should be quotenode
 	compound_name_arguments(In, '.', [A,B]).
 
 contains_dot(Term) :-
@@ -96,47 +98,26 @@ contains_at(Term) :-
 	->  true
 	).
 
-expand_symb_name(TermIn, TermOut) :-
-    compound(TermIn), !,
-    (   join_colon(TermIn, Out)
-    ->  TermOut = Out
-    ;   contains_at(TermIn)
-    ->  compound_name_arguments(TermIn, Name, ArgsIn),
-        maplist(expand_symb_name, ArgsIn, ArgsOut),
-        compound_name_arguments(TermOut, Name, ArgsOut)
-    ;   TermOut = TermIn
-    ).
-expand_symb_name(Term, Term).
+%% Turn list to tuple
+list_tuple([A], (A)). 
+list_tuple([A,B|L], (A,R)) :-
+    list_tuple([B|L], R).
 
-join_colon(In, jl_symb(A)) :-
-	compound_name_arguments(In, ':', [A]).
+jl_new_array(Name, Type, Dim) :-
+    swritef(Str, '%w = Array{%w, %w}()', [Name, Type, Dim]),
+    := Str.
+jl_new_array(Name, Type, Init, Size) :-
+    length(Size, Dim),
+    list_tuple(Size, Size_Tuple),
+    swritef(Str, '%w = Array{%w, %w}(%w, %w)', [Name, Type, Dim, Init, Size_Tuple]),
+    := Str.
 
-contains_colon(Term) :-
-	compound(Term),
-	(   compound_name_arity(Term, ':', 1)
-	->  true
-	;   arg(_, Term, Arg),
-	    contains_at(Arg)
-	->  true
-	).
-
-user:term_expansion((A ->> B), jl_inline(A, B)) :- !.
-user:term_expansion(array:{Type, Dim}:(Init, Size), jl_new_array(Type, Dim, Init, [Size])) :-
-    julia_type(Type), !.
-
-/*
-user:goal_expansion(tuple(List) := Expr, jl_tuple_unify_str(List, Expr)) :-
-    string(Expr), !.
-user:goal_expansion(tuple(List) := Expr, jl_tuple_unify(List, Expr)) :- !.
-*/
 user:goal_expansion(In, Out) :-
     contains_dot(In), !,
     expand_dotted_name(In, Out).
 user:goal_expansion(In, Out) :-
 	contains_at(In), !,
 	expand_macro_name(In, Out).
-user:goal_expansion(In, Out) :-
-	contains_colon(In), !,
-	expand_symb_name(In, Out).
+user:goal_expansion((A ->> B), jl_inline(A, B)) :- !.
 
 :- load_foreign_library("lib/jurassic.so").

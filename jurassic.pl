@@ -47,6 +47,14 @@
 ':='(Y, X) :-
     jl_eval(X, Y).
 
+/* array init */
+jl_new_array(Name, Type, Init, Size) :-
+    length(Size, Dim),
+    list_tuple(Size, Size_Tuple), !,
+    swritef(Str, '%w = Array{%w, %w}(%w, %w)', [Name, Type, Dim, Init, Size_Tuple]),
+    := Str.
+
+
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
  Syntax
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -102,15 +110,6 @@ contains_at(Term) :-
 list_tuple([A], (A)). 
 list_tuple([A,B|L], (A,R)) :-
     list_tuple([B|L], R).
-
-jl_new_array(Name, Type, Dim) :-
-    swritef(Str, '%w = Array{%w, %w}()', [Name, Type, Dim]),
-    := Str.
-jl_new_array(Name, Type, Init, Size) :-
-    length(Size, Dim),
-    list_tuple(Size, Size_Tuple),
-    swritef(Str, '%w = Array{%w, %w}(%w, %w)', [Name, Type, Dim, Init, Size_Tuple]),
-    := Str.
 
 user:goal_expansion(In, Out) :-
     contains_dot(In), !,

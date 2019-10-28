@@ -95,10 +95,10 @@ BoundsError: attempt to access 5×5 Array{Int64,2} at index [1, 100]
 false.
 ```
 
-Define more complex functions with strings:
+Define more complex functions with command strings by predicate `cmd/1`:
 
 ``` prolog
-?- := "fib(n) = n <= 1 ? 1 : fib(n-1) + fib(n-2)".
+?- := cmd("fib(n) = n <= 1 ? 1 : fib(n-1) + fib(n-2)").
 true.
 
 ?- := @time(@show(fib(46))).
@@ -110,7 +110,7 @@ true.
 Multiple lines also work:
 
 ``` prolog
-?- := "function fib2(n)
+?- := cmd("function fib2(n)
          n <= 1 && return 1
          sum = 0
          while n > 1
@@ -118,7 +118,7 @@ Multiple lines also work:
              n -= 2
          end
          return sum + 1
-     end".
+     end").
 true.
 
 ?- := @time(@show(fib2(46))).
@@ -167,9 +167,9 @@ true.
 true.
 ```
 
-`Jurassic.pl` also supports Julia's `'Package'.function` calls. The `'Package'`
-is quoted as a Prolog atom, otherwise uppercase words are treated as Prolog
-variables.
+`Jurassic.pl` also supports Julia's `'Package'.function` field accessing. The
+`'Package'` is quoted as a Prolog atom, otherwise uppercase words are treated as
+Prolog variables.
 
 ``` prolog
 ?- jl_using("Pkg").
@@ -181,6 +181,24 @@ true.
   [159f3aea] Cairo v0.6.0
   [324d7699] CategoricalArrays v0.6.0
   ...
+true.
+
+```
+
+It also works with `struct` fields as well:
+
+``` prolog
+?- := "struct point
+           x
+           y
+       end".
+true.
+
+?- a := cmd("[point([1,2,3],[1,2,3]), point([2,3,4],[2,3,4])]").
+true.
+
+?- := @show(a[2].x[1]).
+(a[2]).x[1] = 2
 true.
 
 ```
@@ -277,6 +295,20 @@ typeof(f([1, 2, 3])) = Array{Int64,2}
 false.
 ```
 
+New arrays can be initialised with `jl_new_array/4`
+predicates, e.g. a tensor:
+
+``` prolog
+% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init,
+Size) in Julia, here Size is a list
+?- jl_new_array(a, 'Int', undef, [2, 2, 2]).
+true.
+
+?- := @show(a[1,:,:]).
+a[1, :, :] = [0 0; 0 0]
+true.
+```
+
 ## Julia Constants and Keywords
 Julia constants as atoms, e.g. `Inf`, `missing`, `nothing`, etc.:
 
@@ -302,6 +334,30 @@ Tuples are defined with Prolog predicate `tuple/1`, whose argument is a list:
 ?- a := tuple([1,2,3,"I'm string!",tuple([2.0,"is a double"])]),
      := @show(a).
 a = (1, 2, 3, "I'm string!", (2.0, "is a double"))
+true.
+```
+
+Tuples are useful for returning multiple values, when it appears on the left
+hand side of `:=`, the atoms in tuples are treated as Julia variables, and
+variables are for unification. This is useful when Julia functions return
+data in multiple formats, for example, a linear regression model (a `struct`)
+with its r2 score (`Float64`) on training data: 
+
+``` prolog
+?- := @show(a).
+UndefVarError: a not defined
+false.
+
+?- := "f(x) = (x, x^2, x^3)".
+true.
+
+?- A = a, tuple([A, B, C]) := f(-2).
+A = a,
+B = 4,
+C = -8.
+
+?- := @show(a).
+a = -2
 true.
 ```
 
@@ -334,7 +390,7 @@ Spreads arguments with `...`:
 true.
 
 ?- := foo([1,2,3]).
-MethodError: no method matching foo(::^PArray{Int64,1})
+MethodError: no method matching foo(::Array{Int64,1})
 Closest candidates are:
   foo(::Any, !Matched::Any, !Matched::Any) at none:0
 false.
@@ -349,7 +405,6 @@ More features to be added, e.g.:
 - [Anonymous
   functions](https://docs.julialang.org/en/v1/manual/functions/#man-anonymous-functions-1);
 - Multi-dimension arrays;
-- Use DCG to parse Prolog expressions as Julia expressions;
 - Multi-threading.
 
 Compile and test code in other platform, e.g.:

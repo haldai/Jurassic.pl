@@ -221,14 +221,14 @@ You can also use strings to define `ccall` functions, just remember to use
 escape character `\"` to pass string arguments:
 
 ``` prolog
-?- := "function getenv(var::AbstractString)
+?- := cmd("function getenv(var::AbstractString)
     val = ccall((:getenv, \"libc.so.6\"),
                 Cstring, (Cstring,), var)
     if val == C_NULL
         error(\"getenv: undefined variable: \", var)
     end
     unsafe_string(val)
-end".
+end").
 true.
 
 ?- X := getenv("SHELL").
@@ -299,8 +299,7 @@ New arrays can be initialised with `jl_new_array/4`
 predicates, e.g. a tensor:
 
 ``` prolog
-% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init,
-Size) in Julia, here Size is a list
+% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init, Size) in Julia, here Size is a list
 ?- jl_new_array(a, 'Int', undef, [2, 2, 2]).
 true.
 

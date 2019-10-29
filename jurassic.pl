@@ -70,6 +70,12 @@ jl_new_array(Name, Type, Init, Size) :-
     ).
 expand_dotted_name(Term, Term).
 
+join_dot(In, Out) :- % the second argument should be quotenode
+	compound_name_arguments(In, '.', [A,B]),
+    compound(B),
+    compound_name_arguments(B, Pred, ArgB),
+    Pred \= [], !,
+    Out =.. [call, jl_field(A, :Pred)|ArgB].
 join_dot(In, jl_field(A, :B)) :- % the second argument should be quotenode
 	compound_name_arguments(In, '.', [A,B]).
 

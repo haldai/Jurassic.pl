@@ -126,10 +126,10 @@ expand_array_init(TermIn, TermOut) :-
     ).
 expand_array_init(Term, Term).
 
-init_array(In, cmd(Str)) :-
+init_array(In, Out) :-
     compound_name_arguments(In, array, [Type, Init|Size]),
-    length(Size, Dim), list_tuple(Size, Size_Tuple),
-    swritef(Str, 'Array{%w, %w}(%w, %w)', [Type, Dim, Init, Size_Tuple]).
+    length(Size, Dim),
+    Out =.. [call, curly('Array', Type, Dim), Init|Size].
 
 contains_array(Term) :-
     compound(Term),
@@ -165,7 +165,7 @@ contains_inline(Term) :-
     ).
 
 %% Turn list to tuple
-list_tuple([A], (A)). 
+                             list_tuple([A], (A)). 
 list_tuple([A,B|L], (A,R)) :-
     list_tuple([B|L], R).
 

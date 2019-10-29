@@ -653,7 +653,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       if ( strcmp(fname, "=") == 0 ||
            strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ||
-           strcmp(fname, "...") == 0) {
+           strcmp(fname, "...") == 0 ||
+           strcmp(fname, "curly") == 0) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);

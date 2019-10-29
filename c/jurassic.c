@@ -8,6 +8,7 @@
 static functor_t FUNCTOR_dot2; /* subfields */
 static functor_t FUNCTOR_cmd1; /* julia command string */
 static functor_t FUNCTOR_symb1;  /* symbol */
+static functor_t FUNCTOR_inline2; /* inline functions */
 static functor_t FUNCTOR_field2; /* var.field */
 static functor_t FUNCTOR_macro1; /* macro */
 static functor_t FUNCTOR_tuple1; /* use tuple/1 to represent julia tuple */
@@ -271,6 +272,43 @@ static jl_value_t *jl_dot(const char *dotname) {
   return re;
 }
 
+/* Julia arguments start from 0, Prolog term arguments start from 1 */
+static int jl_set_arg(jl_expr_t **ex, size_t idx, term_t term) {
+  JL_TRY {
+    jl_expr_t *arg = compound_to_jl_expr(term);
+    if (arg == NULL) {
+      printf("[ERR] Convert Prolog term argument %lu failed!\n", idx);
+      return JURASSIC_FAIL;
+    }
+    jl_exprargset(*ex, idx, arg);
+    jl_gc_wb(*ex, arg); // for safety
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
+    return JURASSIC_FAIL;
+  }
+  return JURASSIC_SUCCESS;
+}
+
+/* Julia expression set a Julia argument */
+static int jl_set_jl_arg(jl_expr_t **ex, size_t idx, jl_value_t *arg) {
+  JL_TRY {
+    if (arg == NULL) {
+      printf("[ERR] Convert Prolog term argument %lu failed!\n", idx);
+      return JURASSIC_FAIL;
+    }
+    jl_exprargset(*ex, idx, arg);
+    jl_gc_wb(*ex, arg); // for safety
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
+    return JURASSIC_FAIL;
+  }
+  return JURASSIC_SUCCESS;
+}
+
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Dynamic functions
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -498,7 +536,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     JL_GC_POP();
     return ex;
-  } else if (strcmp(fname, "[]") == 0 || strcmp(fname, "{}") == 0) {
+  } else if (strcmp(fname, "[]") == 0) {
     /* reference in array */
     /* term like a[i,j] =.. [[], [i,j], a]. use :ref function */
     term_t collection = PL_new_term_ref();
@@ -551,6 +589,47 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     JL_GC_POP();
     return ex;
+  } else if (PL_is_functor(expr, FUNCTOR_inline2) && arity == 2) {
+#ifdef JURASSIC_DEBUG
+    printf("        Functor: ->/2.\n");
+#endif
+    jl_expr_t *ex = jl_exprn(jl_symbol("->"), 2);
+    JL_GC_PUSH1(&ex);
+    /* assign first argument */
+    term_t arg = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, arg) || !jl_set_arg(&ex, 0, arg)) {
+#ifdef JURASSIC_DEBUG
+      printf("        Cannot get argument 1.\n");
+#endif
+      JL_GC_POP(); // POP ex
+      return NULL;
+    } else {
+      /* assign second argument (:block, :quotenode, expr)*/
+      jl_expr_t *ex2 = jl_exprn(jl_symbol("block"), 2);
+      JL_GC_PUSH1(&ex2);
+      if (!PL_get_arg(2, expr, arg)) {
+#ifdef JURASSIC_DEBUG
+        printf("        Cannot get argument 2.\n");
+#endif
+        JL_GC_POP(); // POP ex2
+        JL_GC_POP(); // POP ex
+        return NULL;
+      } else {
+        jl_set_jl_arg(&ex2, 0, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing)); // linenumbernode
+        if (!jl_set_arg(&ex2, 1, arg) || !jl_set_jl_arg(&ex, 1, (jl_value_t *) ex2)) {
+          JL_GC_POP(); // POP ex2
+          JL_GC_POP(); // POP ex
+          return NULL;
+        }
+        JL_GC_POP();
+      }
+    }
+#ifdef JURASSIC_DEBUG
+    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
+    jl_printf(JL_STDOUT, "\n");
+#endif
+    JL_GC_POP(); // POP ex
+    return ex;
   } else {
     /* functor to julia function symbol */
     if (arity == 0) {
@@ -574,8 +653,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       if ( strcmp(fname, "=") == 0 ||
            strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ||
-           strcmp(fname, "...") == 0 ||
-           strcmp(fname, "->") == 0) {
+           strcmp(fname, "...") == 0) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
@@ -645,19 +723,8 @@ int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size
       return JURASSIC_FAIL;
     printf("%s.\n", str_arg);
 #endif
-    JL_TRY {
-      jl_expr_t *a_i = compound_to_jl_expr(arg_term);
-      if (a_i == NULL) {
-        printf("[ERR] Convert Prolog term argument %lu failed!\n", i + start_jl);
-        return JURASSIC_FAIL;
-      }
-      jl_exprargset(*ex, i + start_jl, a_i);
-      jl_exception_clear();
-    } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
-      jl_throw_exception();
+    if (!jl_set_arg(ex, i + start_jl, arg_term))
       return JURASSIC_FAIL;
-    }
   }
   return JURASSIC_SUCCESS;
 }
@@ -1080,6 +1147,7 @@ install_t install_jurassic(void) {
   FUNCTOR_symb1 = PL_new_functor(PL_new_atom("jl_symb"), 1);
   FUNCTOR_cmd1 = PL_new_functor(PL_new_atom("cmd"), 1);
   FUNCTOR_field2 = PL_new_functor(PL_new_atom("jl_field"), 2);
+  FUNCTOR_inline2 = PL_new_functor(PL_new_atom("jl_inline"), 2);
   FUNCTOR_tuple1 = PL_new_functor(PL_new_atom("tuple"), 1);
   FUNCTOR_macro1 = PL_new_functor(PL_new_atom("jl_macro"), 1);
   FUNCTOR_equal2 = PL_new_functor(PL_new_atom("="), 2);

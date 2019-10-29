@@ -295,19 +295,6 @@ typeof(f([1, 2, 3])) = Array{Int64,2}
 false.
 ```
 
-New arrays can be initialised with `jl_new_array/4`
-predicates, e.g. a tensor:
-
-``` prolog
-% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init, Size) in Julia, here Size is a list
-?- jl_new_array(a, 'Int', undef, [2, 2, 2]).
-true.
-
-?- := @show(a[1,:,:]).
-a[1, :, :] = [0 0; 0 0]
-true.
-```
-
 ## Julia Constants and Keywords
 Julia constants as atoms, e.g. `Inf`, `missing`, `nothing`, etc.:
 
@@ -347,7 +334,7 @@ with its r2 score (`Float64`) on training data:
 UndefVarError: a not defined
 false.
 
-?- := "f(x) = (x, x^2, x^3)".
+?- := cmd("f(x) = (x, x^2, x^3)").
 true.
 
 ?- A = a, tuple([A, B, C]) := f(-2).
@@ -398,12 +385,54 @@ false.
 true.
 ```
 
+## Anonymous functions
+
+[Anonymous
+functions](https://docs.julialang.org/en/v1/manual/functions/#man-anonymous-functions-1)
+are useful in second-order functions. `Jurassic.pl` use operator `->>` instead
+of `->` because the latter one is the [condition
+operator](https://www.swi-prolog.org/pldoc/man?predicate=-%3E/2) in Prolog.
+Following is an example of using `->>`:
+
+``` prolog
+?- X := map(x ->> pi*x, [1,2,3,4,5]).
+X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172, 15.707963267948966].
+```
+
+## TODO: Multi-dimension Arrays
+Array can be initialised with function `array`, which is equal to `Array{Type,
+Dim}(Init, Size)` in Julia:
+
+``` prolog
+?- a := array('Float64', undef, 2, 2, 2).
+true.
+
+?- := @show(a[1,:,:]).
+a[1, :, :] = [0.0 0.0; 0.0 0.0]
+true.
+```
+
+New arrays can also be initialised with a Prolog predicate `jl_new_array/4` predicates:
+
+``` prolog
+% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init,
+% Size) in Julia, here Size is a list.
+?- jl_new_array(a, 'Int', undef, [2, 2, 2]).
+true.
+
+?- := @show(a[1,:,:]).
+a[1, :, :] = [0 0; 0 0]
+true.
+```
+
+At current stage, multiple-dimension arrays cannot be unified with Prolog
+variable, so the initialisation only stores the initialised arrays in atoms (as
+names of Julia variables).
+
 # TODO
 More features to be added, e.g.:
 
-- [Anonymous
-  functions](https://docs.julialang.org/en/v1/manual/functions/#man-anonymous-functions-1);
-- Multi-dimension arrays;
+- Unify multi-dimension arrays with Prolog lists;
 - Multi-threading.
 
 Compile and test code in other platform, e.g.:

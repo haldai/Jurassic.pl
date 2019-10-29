@@ -13,7 +13,7 @@
                      ':='/2,
                      op(950, fx, :=),
                      op(950, yfx, :=),
-                     op(900, yfx, ->>),
+                     op(900, yfx, '->>'),
                      op(700, yfx, (+=)),
                      op(700, yfx, (-=)),
                      op(700, yfx, (*=)),
@@ -114,6 +114,56 @@ contains_at(Term) :-
 	->  true
 	).
 
+expand_array_init(TermIn, TermOut) :-
+    compound(TermIn), !,
+    (   init_array(TermIn, Out)
+    ->  TermOut = Out
+    ;   contains_array(TermIn)
+    ->  compound_name_arguments(TermIn, Name, ArgsIn),
+        maplist(expand_array_init, ArgsIn, ArgsOut),
+        compound_name_arguments(TermOut, Name, ArgsOut)
+    ;   TermOut = TermIn
+    ).
+expand_array_init(Term, Term).
+
+init_array(In, cmd(Str)) :-
+    compound_name_arguments(In, array, [Type, Init|Size]),
+    length(Size, Dim), list_tuple(Size, Size_Tuple),
+    swritef(Str, 'Array{%w, %w}(%w, %w)', [Type, Dim, Init, Size_Tuple]).
+
+contains_array(Term) :-
+    compound(Term),
+    (   compound_name_arity(Term, array, _)
+    ->  true
+    ;   arg(_, Term, Arg),
+        contains_array(Arg)
+    ->  true
+    ).
+
+expand_inline_init(TermIn, TermOut) :-
+    compound(TermIn), !,
+    (   init_inline(TermIn, Out)
+    ->  TermOut = Out
+    ;   contains_inline(TermIn)
+    ->  compound_name_arguments(TermIn, Name, ArgsIn),
+        maplist(expand_inline_init, ArgsIn, ArgsOut),
+        compound_name_arguments(TermOut, Name, ArgsOut)
+    ;   TermOut = TermIn
+    ).
+expand_inline_init(Term, Term).
+
+init_inline(In, jl_inline(A, B)) :-
+    compound_name_arguments(In, '->>', [A, B]).
+
+contains_inline(Term) :-
+    compound(Term),
+    (   compound_name_arity(Term, '->>', 2)
+    ->  true
+    ;   arg(_, Term, Arg),
+        contains_inline(Arg)
+    ->  true
+    ).
+
 %% Turn list to tuple
 list_tuple([A], (A)). 
 list_tuple([A,B|L], (A,R)) :-
@@ -125,6 +175,11 @@ user:goal_expansion(In, Out) :-
 user:goal_expansion(In, Out) :-
 	contains_at(In), !,
 	expand_macro_name(In, Out).
-user:goal_expansion((A ->> B), jl_inline(A, B)) :- !.
+user:goal_expansion(In, Out) :-
+    contains_array(In),
+    expand_array_init(In, Out).
+user:goal_expansion(In, Out) :-
+    contains_inline(In),
+    expand_inline_init(In, Out).
 
 :- load_foreign_library("lib/jurassic.so").

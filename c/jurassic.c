@@ -195,7 +195,7 @@ static int jl_access_var(const char *var, jl_value_t **ret) {
 /* Variable assignment */
 static int jl_assign_var(const char *var, jl_value_t *val) {
   JL_TRY {
-    jl_set_global(jl_main_module, jl_symbol_lookup(var), val);
+    jl_set_global(jl_main_module, jl_symbol(var), val);
     jl_exception_clear();
   } JL_CATCH {
     jl_get_ptls_states()->previous_exception = jl_current_exception();
@@ -1010,7 +1010,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
   return JURASSIC_SUCCESS;
 }
 
-/* TODO tuple? array? */
+/* unify the idx-th element in tuple */
 static int jl_tuple_ref_unify(term_t * pl_term, jl_value_t * val, size_t idx) {
   size_t n = jl_nfields(val);
   jl_value_t * v = jl_get_nth_field_checked(val, idx);

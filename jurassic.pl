@@ -7,6 +7,8 @@
                      jl_eval_str/2,
                      jl_tuple_unify_str/2,
                      jl_tuple_unify/2,
+                     jl_isdefined/2,
+                     jl_new_array/2,
                      ':='/1,
                      ':='/2,
                      op(950, fx, :=),
@@ -54,7 +56,6 @@ jl_new_array(Name, Type, Init, Size) :-
     list_tuple(Size, Size_Tuple), !,
     swritef(Str, '%w = Array{%w, %w}(%w, %w)', [Name, Type, Dim, Init, Size_Tuple]),
     := Str.
-
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
  Syntax

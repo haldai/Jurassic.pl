@@ -415,8 +415,8 @@ true.
 New arrays can also be initialised with a Prolog predicate `jl_new_array/4` predicates:
 
 ``` prolog
-% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init,
-% Size) in Julia, here Size is a list.
+% jl_new_array(Name, Type, Init, Size) works like Name = Array{Type, Dim}(Init, Size)
+% in Julia, here Size is a list.
 ?- jl_new_array(a, 'Int', undef, [2, 2, 2]).
 true.
 

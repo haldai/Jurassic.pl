@@ -60,7 +60,7 @@ jl_new_array(Name, Type, Init, Size) :-
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
  Syntax
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-    expand_dotted_name(TermIn, TermOut) :-
+expand_dotted_name(TermIn, TermOut) :-
     compound(TermIn), !,
     (   join_dot(TermIn, Out)
     ->  TermOut = Out
@@ -165,7 +165,7 @@ contains_inline(Term) :-
     ).
 
 %% Turn list to tuple
-                             list_tuple([A], (A)). 
+list_tuple([A], (A)). 
 list_tuple([A,B|L], (A,R)) :-
     list_tuple([B|L], R).
 

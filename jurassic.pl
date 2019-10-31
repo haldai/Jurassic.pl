@@ -140,6 +140,32 @@ contains_array(Term) :-
     ->  true
     ).
 
+%% Union{T1, T2, ...}
+expand_union_init(TermIn, TermOut) :-
+    compound(TermIn), !,
+    (   init_union(TermIn, Out)
+    ->  TermOut = Out
+    ;   contains_union(TermIn)
+    ->  compound_name_arguments(TermIn, Name, ArgsIn),
+        maplist(expand_union_init, ArgsIn, ArgsOut),
+        compound_name_arguments(TermOut, Name, ArgsOut)
+    ;   TermOut = TermIn
+    ).
+expand_union_init(Term, Term).
+
+init_union(In, Out) :-
+    compound_name_arguments(In, union, Types),
+    Out =.. [curly, 'Union'|Types].
+
+contains_union(Term) :-
+    compound(Term),
+    (   compound_name_arity(Term, union, _)
+    ->  true
+    ;   arg(_, Term, Arg),
+        contains_union(Arg)
+    ->  true
+    ).
+
 expand_inline_init(TermIn, TermOut) :-
     compound(TermIn), !,
     (   init_inline(TermIn, Out)
@@ -175,6 +201,9 @@ user:goal_expansion(In, Out) :-
 user:goal_expansion(In, Out) :-
 	contains_at(In), !,
 	expand_macro_name(In, Out).
+user:goal_expansion(In, Out) :-
+    contains_union(In),
+    expand_union_init(In, Out).
 user:goal_expansion(In, Out) :-
     contains_array(In),
     expand_array_init(In, Out).

@@ -425,6 +425,22 @@ a[1, :, :] = [0 0; 0 0]
 true.
 ```
 
+Array initialisation also supports [type
+unions](https://docs.julialang.org/en/v1/manual/types/#Type-Unions-1) with
+predicate `union(Type1, Type2, ...)`:
+
+``` prolog
+?- a := array(union('Int64', 'Missing'), missing, 2, 2).
+true.
+
+?- a[1, :] := [1,2].
+true.
+
+?- := @show(a).
+a = Union{Missing, Int64}[1 2; missing missing]
+true.
+```
+
 At current stage, multiple-dimension arrays cannot be unified with Prolog
 variable, so the initialisation only stores the initialised arrays in atoms (as
 names of Julia variables).

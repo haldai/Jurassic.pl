@@ -199,8 +199,8 @@ user:goal_expansion(In, Out) :-
     contains_dot(In), !,
     expand_dotted_name(In, Out).
 user:goal_expansion(In, Out) :-
-	contains_at(In), !,
-	expand_macro_name(In, Out).
+    contains_at(In), !,
+    expand_macro_name(In, Out).
 user:goal_expansion(In, Out) :-
     contains_union(In),
     expand_union_init(In, Out).

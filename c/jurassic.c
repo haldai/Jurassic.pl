@@ -1042,8 +1042,8 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     if (nargs == 0) {
 #ifdef JURASSIC_DEBUG
       printf("       Empty tuple: ()\n");
-      PL_put_atom(list, ATOM_nil);
 #endif
+      PL_put_nil(list);
     } else {
       /* Construct list */
       PL_put_nil(list);

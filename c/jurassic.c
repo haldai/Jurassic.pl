@@ -1113,22 +1113,34 @@ static int jl_tuple_unify_all(term_t * pl_tuple, jl_value_t * val) {
 #endif
       return JURASSIC_FAIL;
     }
-    size_t len = list_length(list);
+    size_t nargs = jl_nfields(val);
+    if (nargs == 0) {
 #ifdef JURASSIC_DEBUG
-    printf("        Unify tuple/%lu.\n", len);
+      printf("       Empty tuple: ()\n");
+#endif
+      term_t empty = PL_new_term_ref();
+      PL_put_nil(empty);
+      if (!PL_unify(list, empty)) {
+        return JURASSIC_FAIL;
+      } else
+        return JURASSIC_SUCCESS;
+    }
+#ifdef JURASSIC_DEBUG
+    printf("        Unify tuple/%lu.\n", nargs);
     jl_printf(JL_STDOUT, "[DEBUG] Tuple value:\n");
     jl_static_show(JL_STDOUT, (jl_value_t *) val);
     jl_printf(JL_STDOUT, "\n");
 #endif
-    size_t i = 0;
     term_t head = PL_new_term_ref();
     term_t l = PL_copy_term_ref(list);
-    while (PL_get_list(l, head, l)) {
-      if (!jl_tuple_ref_unify(&head, val, i))
+    for (size_t i = 0; i < nargs; i++) {
+      if (!PL_unify_list(l, head, l) || !jl_tuple_ref_unify(&head, val, i))
         return JURASSIC_FAIL;
-      i++;
     }
-    return JURASSIC_SUCCESS;
+    if (PL_unify_nil(l))
+      return JURASSIC_SUCCESS;
+    else
+      return JURASSIC_FAIL;
   } else
     return JURASSIC_FAIL;
 }

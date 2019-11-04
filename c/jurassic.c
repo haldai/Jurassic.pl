@@ -1012,7 +1012,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
         printf("        Empty Array: []\n");
 #endif
-        tmp_term = ATOM_nil;
+        PL_put_nil(tmp_term);
       } else {
         PL_put_nil(tmp_term);
         int i = len;
@@ -1065,10 +1065,10 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
         }
         JL_GC_POP();
       }
-      /* Construct tuple/1 compound */
-      if (!PL_cons_functor(tmp_term, FUNCTOR_tuple1, list))
-        return JURASSIC_FAIL;
     }
+    /* Construct tuple/1 compound */
+    if (!PL_cons_functor(tmp_term, FUNCTOR_tuple1, list))
+      return JURASSIC_FAIL;
   }
   /* unify with the converted term */
   if (!PL_unify(*ret, tmp_term)) {

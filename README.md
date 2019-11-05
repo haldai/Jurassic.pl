@@ -363,6 +363,19 @@ a = -2
 true.
 ```
 
+**Remark**: Tuples are *always* evaluated before unification:
+
+``` prolog
+?- a := 1.
+true.
+
+?- X := [a, :a].
+X = [1, :a].
+
+?- X := tuple([1+1, :a]).
+X = tuple([2, 1]).
+```
+
 Keyword assignments in a function call are represented by the `kw/2` predicate:
 
 ``` prolog

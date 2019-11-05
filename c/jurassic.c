@@ -330,7 +330,7 @@ static int jl_tuple_ref_unify(term_t *pl_term, jl_value_t *val, size_t idx) {
   return JURASSIC_FAIL;
 }
 
-/* TODO: unify prolog tuple([A|B]) with julia functions that returns a tuple */
+/* unify prolog tuple([A|B]) with julia functions that returns a tuple */
 static int jl_tuple_unify_all(term_t *pl_tuple, jl_value_t *val) {
   if (PL_is_functor(*pl_tuple, FUNCTOR_tuple1)) {
     term_t list = PL_new_term_ref();
@@ -629,7 +629,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     JL_GC_POP();
     return ex;
   } else if (PL_is_functor(expr, FUNCTOR_tuple1) && arity == 1) {
-    term_t list = PL_new_term_ref();;
+    term_t list = PL_new_term_ref();
     if (!PL_get_arg(1, expr, list)) {
       printf("[ERR] Cannot access tuple arguments!\n");
       return NULL;

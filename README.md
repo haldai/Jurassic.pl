@@ -335,7 +335,7 @@ Tuples are defined with Prolog predicate `tuple/1`, whose argument is a list:
 ``` prolog
 ?- a := tuple([1,"I'm string!", tuple([2.0, :'I\'m an atom'])]),
      := @show(a).
-a = (1, "I'm string!", (2.0, Symbol("I'm an atom")))
+a = (1, "I'm string!", (2.0, Symbol("I'm a quoted symbol")))
 true.
 ```
 

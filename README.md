@@ -272,6 +272,22 @@ Y = 2,
 Z = c.
 ```
 
+In order to make the code less ambiguous, please use `QuoteNode` symbol "`:`" if
+you do not want to access the value an atom (Julia variable):
+
+``` prolog
+?- a := array('Int64', undef, 2, 2).
+true.
+
+?- X = a, := @show(X).
+a = [0 0; 0 0]
+X = a.
+
+?- X = :a, := @show(X).
+:a = :a
+X = :a.
+```
+
 Currently, the unification only works for 1d-arrays:
 
 ``` prolog
@@ -317,9 +333,9 @@ ERROR:    [9] <user>
 Tuples are defined with Prolog predicate `tuple/1`, whose argument is a list:
 
 ``` prolog
-?- a := tuple([1,2,3,"I'm string!",tuple([2.0,"is a double"])]),
+?- a := tuple([1,"I'm string!", tuple([2.0, :'I\'m an atom'])]),
      := @show(a).
-a = (1, 2, 3, "I'm string!", (2.0, "is a double"))
+a = (1, "I'm string!", (2.0, Symbol("I'm an atom")))
 true.
 ```
 

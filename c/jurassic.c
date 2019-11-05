@@ -6,8 +6,8 @@
 
 /* atoms for julia expressions */
 static functor_t FUNCTOR_dot2; /* subfields */
+static functor_t FUNCTOR_quote1; /* quotenode : */
 static functor_t FUNCTOR_cmd1; /* julia command string */
-static functor_t FUNCTOR_symb1;  /* symbol */
 static functor_t FUNCTOR_inline2; /* inline functions */
 static functor_t FUNCTOR_field2; /* var.field */
 static functor_t FUNCTOR_macro1; /* macro */
@@ -142,7 +142,7 @@ static int checked_eval_string(const char *code, jl_value_t **ret) {
   return JURASSIC_SUCCESS;
 }
 /* Evaluate Julia string with return value */
-static jl_value_t * checked_send_command_str(const char *code) {
+static jl_value_t *checked_send_command_str(const char *code) {
   jl_value_t *ret = jl_eval_string(code);
   if (jl_exception_occurred()) {
     // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
@@ -307,6 +307,68 @@ static int jl_set_jl_arg(jl_expr_t **ex, size_t idx, jl_value_t *arg) {
     return JURASSIC_FAIL;
   }
   return JURASSIC_SUCCESS;
+}
+
+/* unify the idx-th element in tuple */
+static int jl_tuple_ref_unify(term_t *pl_term, jl_value_t *val, size_t idx) {
+  size_t n = jl_nfields(val);
+  jl_value_t * v = jl_get_nth_field_checked(val, idx);
+#ifdef JURASSIC_DEBUG
+  jl_printf(JL_STDOUT, "[DEBUG] item: %lu/%lu\n", idx, n);
+  jl_static_show(JL_STDOUT, (jl_value_t *) v);
+  jl_printf(JL_STDOUT, "\n");
+#endif
+  if (PL_is_atom(*pl_term) && PL_is_ground(*pl_term)) {
+    // assignment
+      char *atom;
+      if (!PL_get_chars(*pl_term, &atom,
+                        CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+        PL_fail;
+      return jl_assign_var(atom, v);
+  } else
+    return jl_unify_pl(v, pl_term);
+  return JURASSIC_FAIL;
+}
+
+/* TODO: unify prolog tuple([A|B]) with julia functions that returns a tuple */
+static int jl_tuple_unify_all(term_t *pl_tuple, jl_value_t *val) {
+  if (PL_is_functor(*pl_tuple, FUNCTOR_tuple1)) {
+    term_t list = PL_new_term_ref();
+    if (!PL_unify_arg(1, *pl_tuple, list)) {
+      printf("[ERR] Cannot access tuple arguments!\n");
+      return JURASSIC_FAIL;
+    }
+    if (!jl_is_tuple(val)) {
+#ifdef JURASSIC_DEBUG
+      printf("        Julia expression doesn't return tuple.\n");
+#endif
+      return JURASSIC_FAIL;
+    }
+    size_t nargs = jl_nfields(val);
+    if (nargs == 0) {
+#ifdef JURASSIC_DEBUG
+      printf("       Empty tuple: ()\n");
+#endif
+      if (!PL_unify_nil(list)) {
+        return JURASSIC_FAIL;
+      } else
+        return JURASSIC_SUCCESS;
+    }
+#ifdef JURASSIC_DEBUG
+    printf("        Unify tuple/%lu.\n", nargs);
+    jl_printf(JL_STDOUT, "[DEBUG] Tuple value:\n");
+    jl_static_show(JL_STDOUT, (jl_value_t *) val);
+    jl_printf(JL_STDOUT, "\n");
+#endif
+    term_t head = PL_new_term_ref();
+    term_t l = PL_copy_term_ref(list);
+    for (size_t i = 0; i < nargs; i++) {
+      if (!PL_unify_list(l, head, l) || !jl_tuple_ref_unify(&head, val, i))
+        return JURASSIC_FAIL;
+    }
+    return PL_unify_nil(l);
+  } else
+    return JURASSIC_FAIL;
 }
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -758,7 +820,7 @@ int list_to_jl(term_t list, int length, jl_array_t **ret, int flag_sym) {
 
 int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
 #ifdef JURASSIC_DEBUG
-  char * show;
+  char *show;
   /* string, to string*/
   if (!PL_get_chars(term, &show,
                     CVT_WRITE|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
@@ -877,7 +939,7 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
       jl_static_show(JL_STDOUT, (jl_value_t *)expr);
       jl_printf(JL_STDOUT, "\n");
 #endif
-      *ret = jl_toplevel_eval_in(jl_main_module, (jl_value_t *)expr);
+      *ret = jl_toplevel_eval_in(jl_main_module, (jl_value_t *) expr);
       JL_GC_POP();
       jl_exception_clear();
     } JL_CATCH {
@@ -909,17 +971,17 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
   jl_static_show(JL_STDOUT, val);
   jl_printf(JL_STDOUT, "\n");
 #endif
-  term_t tmp_term = PL_new_term_ref();
+  term_t tmp_term = PL_copy_term_ref(*ret);
   if (jl_is_nothing(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Nothing.\n");
 #endif
-    PL_put_atom(tmp_term, ATOM_nothing);
+    return PL_unify_atom(tmp_term, ATOM_nothing);
   } else if (val == jl_eval_string("missing")) {
 #ifdef JURASSIC_DEBUG
     printf("        Missing.\n");
 #endif
-    PL_put_atom(tmp_term, ATOM_missing);
+    return PL_unify_atom(tmp_term, ATOM_missing);
   } else if (jl_is_bool(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Bool: ");
@@ -928,20 +990,18 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
     printf("%d.\n", retval);
 #endif
-    if (!PL_put_bool(tmp_term, retval))
-      return JURASSIC_FAIL;
+    return PL_unify_bool(tmp_term, retval);
   } else if (jl_is_int8(val) || jl_is_int16(val) || jl_is_int32(val) ||
              jl_is_int64(val) || jl_is_uint8(val) || jl_is_uint16(val) ||
              jl_is_uint32(val) || jl_is_uint64(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Integer: ");
 #endif
-    int64_t retval =jl_unbox_int64(val);
+    int64_t retval = jl_unbox_int64(val);
 #ifdef JURASSIC_DEBUG
     printf("%ld.\n", retval);
 #endif
-    if (!PL_put_int64(tmp_term, retval))
-      return JURASSIC_FAIL;
+    return PL_unify_int64(tmp_term, retval);
   } else if (jl_typeis(val, jl_float16_type) ||
              jl_typeis(val, jl_float32_type) ||
              jl_typeis(val, jl_float64_type)) {
@@ -956,29 +1016,38 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
       printf("        Inf.\n");
 #endif
-      PL_put_atom(tmp_term, ATOM_inf);
+      return PL_unify_atom(tmp_term, ATOM_inf);
     } else if (retval == D_NINF) {
 #ifdef JURASSIC_DEBUG
       printf("        -Inf.\n");
 #endif
-      PL_put_atom(tmp_term, ATOM_ninf);
+      return PL_unify_atom(tmp_term, ATOM_ninf);
     } else if (isnan(retval)) {
 #ifdef JURASSIC_DEBUG
       printf("        NaN.\n");
 #endif
-      PL_put_atom(tmp_term, ATOM_nan);
-    } else if (!PL_put_float(tmp_term, retval))
-      return JURASSIC_FAIL;
+      return PL_unify_atom(tmp_term, ATOM_nan);
+    } else
+      return PL_unify_float(tmp_term, retval);
   } else if (jl_is_string(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        String: ");
 #endif
-    const char* retval = jl_string_ptr(val);
+    const char *retval = jl_string_ptr(val);
 #ifdef JURASSIC_DEBUG
     printf("%s.\n", retval);
 #endif
-    if (!PL_put_string_chars(tmp_term, retval))
-      return JURASSIC_FAIL;
+    return PL_unify_string_chars(tmp_term, retval);
+  } else if (jl_is_quotenode(val)) {
+#ifdef JURASSIC_DEBUG
+    printf("        QuoteNode: ");
+#endif
+    const char *retval = jl_string_ptr(val);
+#ifdef JURASSIC_DEBUG
+    printf(":%s.\n", retval);
+#endif
+    return PL_unify_functor(tmp_term, FUNCTOR_quote1) &&
+      PL_unify_arg(1, tmp_term, PL_new_atom(retval));
   } else if (jl_is_symbol(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Symbol (Atom): ");
@@ -988,8 +1057,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     printf("%s.\n", retval);
 #endif
     if (strchr(retval, '.') != NULL) {
-      if (!jl_unify_pl(jl_dot(retval), &tmp_term))
-        return JURASSIC_FAIL;
+      return jl_unify_pl(jl_dot(retval), &tmp_term);
     } else if (jl_is_defined(retval)) {
 #ifdef JURASSIC_DEBUG
       printf("--- is defined.\n");
@@ -997,10 +1065,9 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
       jl_value_t *var_val;
       if (!jl_access_var(retval, &var_val))
         return JURASSIC_FAIL;
-      if (!jl_unify_pl(var_val, &tmp_term))
-        return JURASSIC_FAIL;
-    } else if (!PL_put_atom_chars(tmp_term, retval))
-      return JURASSIC_FAIL;
+      return jl_unify_pl(var_val, &tmp_term);
+    } else
+      return PL_unify_atom_chars(tmp_term, retval);
   } else if (jl_is_array(val)) {
     if (jl_array_ndims(val) == 1) {
 #ifdef JURASSIC_DEBUG
@@ -1012,23 +1079,21 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
         printf("        Empty Array: []\n");
 #endif
-        PL_put_nil(tmp_term);
+        return PL_unify_nil(tmp_term);
       } else {
-        PL_put_nil(tmp_term);
-        int i = len;
-        while (--i >= 0) {
+        term_t head = PL_new_term_ref();
+        for (size_t i = 0; i < len; i++) {
 #ifdef JURASSIC_DEBUG
-          printf("---- #%d:\n", i);
+          printf("---- #%lu:\n", i);
 #endif
-          term_t head = PL_new_term_ref();
-          if (!jl_unify_pl(jl_arrayref((jl_array_t *)val, i), &head)) // Use jl_arrayref to retrieve boxed jl_value_t *,
-                                                                      // Don't use jl_array_data, which retrieves unboxed c array.
-            return JURASSIC_FAIL;
-          if (!PL_cons_list(tmp_term, head, tmp_term))
+          if (!PL_unify_list(tmp_term, head, tmp_term) ||
+              !jl_unify_pl(jl_arrayref((jl_array_t *)val, i), &head))
             return JURASSIC_FAIL;
         }
+        return PL_unify_nil(tmp_term);
       }
     } else {
+      // TODO: Unify with Multi-dimensional arrays with list of list of list...
       printf("[ERR] Cannot unify list with matrices and tensors!\n");
       return JURASSIC_FAIL;
     }
@@ -1037,112 +1102,9 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     printf("[DEBUG] Tuple:\n");
 #endif
     /* Tuple */
-    size_t nargs = jl_nfields(val);
-    term_t list = PL_new_term_ref();
-    if (nargs == 0) {
-#ifdef JURASSIC_DEBUG
-      printf("       Empty tuple: ()\n");
-#endif
-      PL_put_nil(list);
-    } else {
-      /* Construct list */
-      PL_put_nil(list);
-      int i = nargs;
-      while (--i >= 0) {
-#ifdef JURASSIC_DEBUG
-        printf("---- #%d:\n", i);
-#endif
-        term_t head = PL_new_term_ref();
-        jl_value_t *element = jl_fieldref(val, i);
-        JL_GC_PUSH1(&element);
-        if (!jl_unify_pl(element, &head)) {
-          JL_GC_POP();
-          return JURASSIC_FAIL;
-        }
-        if (!PL_cons_list(list, head, list)) {
-          JL_GC_POP();
-          return JURASSIC_FAIL;
-        }
-        JL_GC_POP();
-      }
-    }
-    /* Construct tuple/1 compound */
-    if (!PL_cons_functor(tmp_term, FUNCTOR_tuple1, list))
-      return JURASSIC_FAIL;
+    return PL_unify_functor(tmp_term, FUNCTOR_tuple1) && jl_tuple_unify_all(&tmp_term, val);
   }
-  /* unify with the converted term */
-  if (!PL_unify(*ret, tmp_term)) {
-    printf("[ERR] Unifying converted term with target term failed!\n");
-    return JURASSIC_FAIL;
-  }
-  return JURASSIC_SUCCESS;
-}
-
-/* unify the idx-th element in tuple */
-static int jl_tuple_ref_unify(term_t * pl_term, jl_value_t * val, size_t idx) {
-  size_t n = jl_nfields(val);
-  jl_value_t * v = jl_get_nth_field_checked(val, idx);
-#ifdef JURASSIC_DEBUG
-  jl_printf(JL_STDOUT, "[DEBUG] item: %lu/%lu\n", idx, n);
-  jl_static_show(JL_STDOUT, (jl_value_t *) v);
-  jl_printf(JL_STDOUT, "\n");
-#endif
-  if (PL_is_atom(*pl_term) && PL_is_ground(*pl_term)) {
-    // assignment
-      char * atom;
-      if (!PL_get_chars(*pl_term, &atom,
-                        CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
-        PL_fail;
-      return jl_assign_var(atom, v);
-  } else
-    return jl_unify_pl(v, pl_term);
   return JURASSIC_FAIL;
-}
-
-/* TODO: unify prolog tuple([A|B]) with julia functions that returns a tuple */
-static int jl_tuple_unify_all(term_t * pl_tuple, jl_value_t * val) {
-  if (PL_is_functor(*pl_tuple, FUNCTOR_tuple1)) {
-    term_t list = PL_new_term_ref();
-    if (!PL_get_arg(1, *pl_tuple, list)) {
-      printf("[ERR] Cannot access tuple arguments!\n");
-      return JURASSIC_FAIL;
-    }
-    if (!jl_is_tuple(val)) {
-#ifdef JURASSIC_DEBUG
-      printf("        Julia expression doesn't return tuple.\n");
-#endif
-      return JURASSIC_FAIL;
-    }
-    size_t nargs = jl_nfields(val);
-    if (nargs == 0) {
-#ifdef JURASSIC_DEBUG
-      printf("       Empty tuple: ()\n");
-#endif
-      term_t empty = PL_new_term_ref();
-      PL_put_nil(empty);
-      if (!PL_unify(list, empty)) {
-        return JURASSIC_FAIL;
-      } else
-        return JURASSIC_SUCCESS;
-    }
-#ifdef JURASSIC_DEBUG
-    printf("        Unify tuple/%lu.\n", nargs);
-    jl_printf(JL_STDOUT, "[DEBUG] Tuple value:\n");
-    jl_static_show(JL_STDOUT, (jl_value_t *) val);
-    jl_printf(JL_STDOUT, "\n");
-#endif
-    term_t head = PL_new_term_ref();
-    term_t l = PL_copy_term_ref(list);
-    for (size_t i = 0; i < nargs; i++) {
-      if (!PL_unify_list(l, head, l) || !jl_tuple_ref_unify(&head, val, i))
-        return JURASSIC_FAIL;
-    }
-    if (PL_unify_nil(l))
-      return JURASSIC_SUCCESS;
-    else
-      return JURASSIC_FAIL;
-  } else
-    return JURASSIC_FAIL;
 }
 
 /*******************************
@@ -1157,7 +1119,7 @@ install_t install_jurassic(void) {
   ATOM_inf = PL_new_atom("inf");
   ATOM_ninf = PL_new_atom("ninf");
   FUNCTOR_dot2 = PL_new_functor(ATOM_dot, 2);
-  FUNCTOR_symb1 = PL_new_functor(PL_new_atom("jl_symb"), 1);
+  FUNCTOR_quote1 = PL_new_functor(PL_new_atom(":"), 1);
   FUNCTOR_cmd1 = PL_new_functor(PL_new_atom("cmd"), 1);
   FUNCTOR_field2 = PL_new_functor(PL_new_atom("jl_field"), 2);
   FUNCTOR_inline2 = PL_new_functor(PL_new_atom("jl_inline"), 2);
@@ -1198,7 +1160,7 @@ install_t install_jurassic(void) {
 
 /* Allow returning value and unifying with Prolog variable */
 foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
-  jl_value_t * ret;
+  jl_value_t *ret;
   JL_TRY {
     if (!pl2jl(jl_expr, &ret, TRUE))
       PL_fail;
@@ -1224,7 +1186,7 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
 
 /* evaluate a string expression */
 foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
-  char * expression;
+  char *expression;
   if (!PL_get_chars(jl_expr, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
@@ -1243,7 +1205,7 @@ foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
 
 /* unify prolog tuple([A|B]) with julia functions that returns a tuple */
 foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr) {
-  jl_value_t * val;
+  jl_value_t *val;
   if (!pl2jl(jl_expr, &val, TRUE))
     PL_fail;
   JL_GC_PUSH1(&val);
@@ -1257,11 +1219,11 @@ foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr) {
 }
 
 foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str) {
-  char * expression;
+  char *expression;
   if (!PL_get_chars(jl_expr_str, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
-  jl_value_t * val;
+  jl_value_t *val;
   if (!checked_eval_string(expression, &val))
     PL_fail;
   JL_GC_PUSH1(&val);
@@ -1276,7 +1238,7 @@ foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str) {
 
 /* evaluate string without returning value */
 foreign_t jl_send_command_str(term_t jl_expr) {
-  char * expression;
+  char *expression;
   if (!PL_get_chars(jl_expr, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;
@@ -1317,7 +1279,7 @@ foreign_t jl_send_command(term_t jl_expr) {
 
 /* test if an atom is defined as julia variable */
 foreign_t jl_isdefined(term_t jl_expr) {
-  char * expression;
+  char *expression;
   if (!PL_get_chars(jl_expr, &expression,
                     CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
     PL_fail;

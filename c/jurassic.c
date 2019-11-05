@@ -939,7 +939,10 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
       jl_static_show(JL_STDOUT, (jl_value_t *)expr);
       jl_printf(JL_STDOUT, "\n");
 #endif
-      *ret = jl_toplevel_eval_in(jl_main_module, (jl_value_t *) expr);
+      if (jl_is_quotenode(expr))
+        *ret = (jl_value_t *) expr;
+      else
+        *ret = jl_toplevel_eval_in(jl_main_module, (jl_value_t *) expr);
       JL_GC_POP();
       jl_exception_clear();
     } JL_CATCH {
@@ -1042,12 +1045,14 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
     printf("        QuoteNode: ");
 #endif
-    const char *retval = jl_string_ptr(val);
+    const char *retval = jl_symbol_name((jl_sym_t *) jl_quotenode_value(val));
 #ifdef JURASSIC_DEBUG
     printf(":%s.\n", retval);
 #endif
-    return PL_unify_functor(tmp_term, FUNCTOR_quote1) &&
-      PL_unify_arg(1, tmp_term, PL_new_atom(retval));
+    term_t qname = PL_new_term_ref();
+    return PL_put_atom(qname, PL_new_atom(retval)) &&
+      PL_unify_functor(tmp_term, FUNCTOR_quote1) &&
+      PL_unify_arg(1, tmp_term, qname);
   } else if (jl_is_symbol(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Symbol (Atom): ");

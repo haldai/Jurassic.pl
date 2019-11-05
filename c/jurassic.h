@@ -7,7 +7,7 @@
 
 //#define JURASSIC_DEBUG
 
-#define BUFFSIZE 1024
+#define BUFFSIZE 4096
 
 #define JURASSIC_SUCCESS 1
 #define JURASSIC_FAIL 0

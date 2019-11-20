@@ -242,14 +242,16 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
 static jl_value_t *jl_dot(const char *dotname) {
   char *dot = strrchr(dotname, '.');
   jl_value_t *re;
-  if (dot == NULL || jl_is_operator((char *)dotname)) {
-    /* no dot or is just operators ".+", ".*" ... */
-    if (strcmp(dotname, "=<") == 0)
-      re = (jl_value_t *) jl_symbol("<=");
-    if (strcmp(dotname, "\\=") == 0)
-      re = (jl_value_t *) jl_symbol("!=");
-    else
+  if (dot == NULL) {
+    if (jl_is_operator((char *)dotname)) {
+      /* no dot or is just operators ".+", ".*" ... */
       re = (jl_value_t *) jl_symbol(dotname);
+    } else if (strcmp(dotname, "=<") == 0) {
+      re = (jl_value_t *) jl_symbol("<=");
+    } else if (strcmp(dotname, "\\=") == 0) {
+      re = (jl_value_t *) jl_symbol("!=");
+    } else
+      return NULL;
   } else {
     /* if dotname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
     JL_TRY {

@@ -246,6 +246,8 @@ static jl_value_t *jl_dot(const char *dotname) {
     /* no dot or is just operators ".+", ".*" ... */
     if (strcmp(dotname, "=<") == 0)
       re = (jl_value_t *) jl_symbol("<=");
+    if (strcmp(dotname, "\\=") == 0)
+      re = (jl_value_t *) jl_symbol("!=");
     else
       re = (jl_value_t *) jl_symbol(dotname);
   } else {

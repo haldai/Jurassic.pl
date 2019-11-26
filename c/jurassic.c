@@ -251,6 +251,9 @@ static jl_value_t *jl_dot(const char *dotname) {
     } else
       return (jl_value_t *) jl_symbol(dotname);
   } else {
+    /* if dotname is an operator, such as .+, .-, .*, etc. */
+    if (jl_is_operator((char *) dotname))
+      return (jl_value_t *) jl_symbol(dotname);
     /* if dotname is Mod.fn, translate to Expr(:Mod, QuoteNode(:fn)) */
     JL_TRY {
       /* Module name */

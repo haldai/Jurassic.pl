@@ -17,6 +17,7 @@ static functor_t FUNCTOR_plusequal2; /* += */
 static functor_t FUNCTOR_minusqual2; /* -= */
 static functor_t FUNCTOR_timesequal2; /* *= */
 static functor_t FUNCTOR_dividesequal2; /* /= */
+static functor_t FUNCTOR_powerequal2; /* ^= */
 static atom_t ATOM_true;
 static atom_t ATOM_false;
 static atom_t ATOM_nan;
@@ -721,7 +722,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
            strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ||
            strcmp(fname, "...") == 0 ||
-           strcmp(fname, "curly") == 0) {
+           strcmp(fname, "curly") == 0 ||
+           jl_is_operator((char *) fname)) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
         printf("        Functor: %s/%lu.\n", fname, arity);
@@ -1140,6 +1142,7 @@ install_t install_jurassic(void) {
   FUNCTOR_minusqual2 = PL_new_functor(PL_new_atom("-="), 2);
   FUNCTOR_timesequal2 = PL_new_functor(PL_new_atom("*="), 2);
   FUNCTOR_dividesequal2 = PL_new_functor(PL_new_atom("/="), 2);
+  FUNCTOR_powerequal2 = PL_new_functor(PL_new_atom("^="), 2);
 
   /* Registration */
   PL_register_foreign("jl_eval_str", 2, jl_eval_str, 0);

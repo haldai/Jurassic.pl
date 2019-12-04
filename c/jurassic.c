@@ -718,14 +718,19 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       return ex;
     } else {
       /* initialise an expression without using :call */
-      if ( strrchr(fname, '=') != NULL ||
+      if ( strcmp(fname, "=") == 0 ||
+           strcmp(fname, "+=") == 0 ||
+           strcmp(fname, "-=") == 0 ||
+           strcmp(fname, "*=") == 0 ||
+           strcmp(fname, "/=") == 0 ||
+           strcmp(fname, "^=") == 0 ||
            strcmp(fname, "call") == 0 ||
            strcmp(fname, "kw") == 0 ||
            strcmp(fname, "...") == 0 ||
            strcmp(fname, "curly") == 0) {
         /* for these meta predicates, no need to add "call" as Expr.head */
 #ifdef JURASSIC_DEBUG
-        printf("        Functor: %s/%lu.\n", fname, arity);
+        printf("        Functor (no call): %s/%lu.\n", fname, arity);
 #endif
         jl_value_t *func = jl_dot(fname);
         if (!func)

@@ -609,31 +609,49 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     /* term like a[i,j] =.. [[], [i,j], a]. use :ref function */
     term_t collection = PL_new_term_ref();
     term_t list = PL_new_term_ref();
-    if (!PL_get_arg(1, expr, list) || !PL_get_arg(2, expr, collection)) {
-      printf("[ERR] Cannot access reference arguments!\n");
-      return NULL;
-    }
-    size_t len = list_length(list);
+    if (arity == 1) {
 #ifdef JURASSIC_DEBUG
-    printf("        Functor: ref/%lu.\n", len);
+      jl_printf(JL_STDOUT, "Array initialisation.");
 #endif
-    /* use :ref as head, list members as arguments */
-    /* a[1,2,3] =.. (:ref, :a, 1, 2, 3)*/
-    jl_expr_t *ex = strcmp(fname, "[]") == 0 ?
-      jl_exprn(jl_symbol("ref"), len+1) : jl_exprn(jl_symbol("curly"), len+1);
-    JL_GC_PUSH1(&ex);
-    jl_exprargset(ex, 0, compound_to_jl_expr(collection)); /* first argument is the collection */
-    /* following arguments are references */
-    if (!list_to_expr_args(list, &ex, 1, len)) {
+      if (!PL_get_arg(1, expr, collection)) {
+        printf("[ERR] Cannot access reference arguments!\n");
+        return NULL;
+      } else {
+        jl_expr_t *ex = jl_exprn(jl_symbol("ref"), 1);
+        jl_exprargset(ex, 0, compound_to_jl_expr(collection));
+#ifdef JURASSIC_DEBUG
+        jl_static_show(JL_STDOUT, (jl_value_t *) ex);
+        jl_printf(JL_STDOUT, "\n");
+#endif
+        return ex;
+      }
+    } else {
+      if (!PL_get_arg(1, expr, list) || !PL_get_arg(2, expr, collection)) {
+        printf("[ERR] Cannot access reference arguments!\n");
+        return NULL;
+      }
+      size_t len = list_length(list);
+#ifdef JURASSIC_DEBUG
+      printf("        Functor: ref/%lu.\n", len);
+#endif
+      /* use :ref as head, list members as arguments */
+      /* a[1,2,3] =.. (:ref, :a, 1, 2, 3)*/
+      jl_expr_t *ex = strcmp(fname, "[]") == 0 ?
+        jl_exprn(jl_symbol("ref"), len+1) : jl_exprn(jl_symbol("curly"), len+1);
+      JL_GC_PUSH1(&ex);
+      jl_exprargset(ex, 0, compound_to_jl_expr(collection)); /* first argument is the collection */
+      /* following arguments are references */
+      if (!list_to_expr_args(list, &ex, 1, len)) {
+        JL_GC_POP();
+        return NULL;
+      }
+#ifdef JURASSIC_DEBUG
+      jl_static_show(JL_STDOUT, (jl_value_t *) ex);
+      jl_printf(JL_STDOUT, "\n");
+#endif
       JL_GC_POP();
-      return NULL;
+      return ex;
     }
-#ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-    jl_printf(JL_STDOUT, "\n");
-#endif
-    JL_GC_POP();
-    return ex;
   } else if (PL_is_functor(expr, FUNCTOR_tuple1) && arity == 1) {
     term_t list = PL_new_term_ref();
     if (!PL_get_arg(1, expr, list)) {

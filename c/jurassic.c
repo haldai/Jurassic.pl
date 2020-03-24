@@ -1023,24 +1023,64 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     printf("%d.\n", retval);
 #endif
     return PL_unify_bool(tmp_term, retval);
-  } else if (jl_is_int8(val) || jl_is_int16(val) || jl_is_int32(val) ||
-             jl_is_int64(val) || jl_is_uint8(val) || jl_is_uint16(val) ||
-             jl_is_uint32(val) || jl_is_uint64(val)) {
+  } else if (jl_is_int8(val)) {
 #ifdef JURASSIC_DEBUG
-    printf("        Integer: ");
+    printf("        Int8: ");
+#endif
+    int8_t retval = jl_unbox_int8(val);
+    #ifdef JURASSIC_DEBUG
+    printf("%ld.\n", retval);
+#endif
+    return PL_unify_integer(tmp_term, retval);
+  } else if (jl_is_int16(val)) {
+#ifdef JURASSIC_DEBUG
+    printf("        Int16: ");
+#endif
+    int16_t retval = jl_unbox_int16(val);
+    #ifdef JURASSIC_DEBUG
+    printf("%ld.\n", retval);
+#endif
+    return PL_unify_integer(tmp_term, retval);
+  } else if (jl_is_int32(val)) {
+#ifdef JURASSIC_DEBUG
+    printf("        Int32: ");
+#endif
+    int32_t retval = jl_unbox_int32(val);
+    #ifdef JURASSIC_DEBUG
+    printf("%ld.\n", retval);
+#endif
+    return PL_unify_integer(tmp_term, retval);
+  } else if (jl_is_int64(val)) {
+#ifdef JURASSIC_DEBUG
+    printf("        Int64: ");
 #endif
     int64_t retval = jl_unbox_int64(val);
-#ifdef JURASSIC_DEBUG
+    #ifdef JURASSIC_DEBUG
     printf("%ld.\n", retval);
 #endif
     return PL_unify_int64(tmp_term, retval);
+  } else if (jl_is_uint8(val) || jl_is_uint16(val) || jl_is_uint32(val)
+             || jl_is_uint64(val)) {
+#ifdef JURASSIC_DEBUG
+    printf("        Unsigned Integer: ");
+#endif
+    uint64_t retval = jl_unbox_uint64(val);
+    #ifdef JURASSIC_DEBUG
+    printf("%ud.\n", retval);
+#endif
+    return PL_unify_uint64(tmp_term, retval);
   } else if (jl_typeis(val, jl_float16_type) ||
              jl_typeis(val, jl_float32_type) ||
              jl_typeis(val, jl_float64_type)) {
 #ifdef JURASSIC_DEBUG
     printf("        Float: ");
 #endif
-    double retval = jl_unbox_float64(val);
+    double retval;
+    if (jl_typeis(val, jl_float64_type)) {
+      retval = jl_unbox_float64(val);
+    } else {
+      retval = jl_unbox_float32(val);
+    }
 #ifdef JURASSIC_DEBUG
     printf("%f.\n", retval);
 #endif

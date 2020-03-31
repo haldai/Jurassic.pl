@@ -554,10 +554,12 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     if (!PL_get_chars(expr, &sym_str,
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
       return NULL;
+    sym_str[strlen(sym_str)-1] = '\0'; // ignore the last ')'
 #ifdef JURASSIC_DEBUG
-    printf("        Symbol (QuoteNode): %s.\n", sym_str);
+    printf("        Symbol (QuoteNode): %s.\n", sym_str+2);
 #endif
-    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(++sym_str));
+    // ignore the beginning ":("
+    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+2));
   } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */
     term_t macro_call = PL_new_term_ref();

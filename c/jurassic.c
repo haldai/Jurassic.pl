@@ -554,12 +554,18 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     if (!PL_get_chars(expr, &sym_str,
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
       return NULL;
-    sym_str[strlen(sym_str)-1] = '\0'; // ignore the last ')'
+
+    int k = 2; // the start position of quotenode in string
+    if (sym_str[2] == '\'' || sym_str[0] == '\"') {
+      sym_str[strlen(sym_str)-2] = '\0';
+      k = 3;
+    } else
+      sym_str[strlen(sym_str)-1] = '\0'; // ignore the last ')'
 #ifdef JURASSIC_DEBUG
-    printf("        Symbol (QuoteNode): %s.\n", sym_str+2);
+    printf("        Symbol (QuoteNode): %s.\n", sym_str+k);
 #endif
     // ignore the beginning ":("
-    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+2));
+    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+k));
   } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */
     term_t macro_call = PL_new_term_ref();

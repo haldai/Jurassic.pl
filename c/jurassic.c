@@ -556,9 +556,9 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       return NULL;
 
     int k = 2; // the start position of quotenode in string
-    if (sym_str[2] == '\'' || sym_str[0] == '\"') {
+    if (sym_str[k] == '\'' || sym_str[k] == '\"') {
       sym_str[strlen(sym_str)-2] = '\0';
-      k = 3;
+      k++;
     } else
       sym_str[strlen(sym_str)-1] = '\0'; // ignore the last ')'
 #ifdef JURASSIC_DEBUG

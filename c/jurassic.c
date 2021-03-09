@@ -555,12 +555,14 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
       return NULL;
 
-    int k = 2; // the start position of quotenode in string
+    int k = 1; // the start position of quotenode in string
+    /*
     if (sym_str[k] == '\'' || sym_str[k] == '\"') {
       sym_str[strlen(sym_str)-2] = '\0';
       k++;
     } else
       sym_str[strlen(sym_str)-1] = '\0'; // ignore the last ')'
+    */
 #ifdef JURASSIC_DEBUG
     printf("        Symbol (QuoteNode): %s.\n", sym_str+k);
 #endif

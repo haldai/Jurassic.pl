@@ -26,11 +26,6 @@ static atom_t ATOM_missing;
 static atom_t ATOM_inf;
 static atom_t ATOM_ninf; /* negative infinity */
 
-static int halt_julia(int rc, void *p) {
-  jl_atexit_hook(rc);
-  return 0;
-}
-
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    static functions
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -1226,6 +1221,7 @@ install_t install_jurassic(void) {
   PL_register_foreign("jl_isdefined", 1, jl_isdefined, 0);
   PL_register_foreign("jl_using", 1, jl_using, 0);
   PL_register_foreign("jl_include", 1, jl_include, 0);
+  PL_register_foreign("jl_embed_halt", 0, jl_embed_halt, 0);
 
   printf("Initialise Embedded Julia ...");
 
@@ -1239,7 +1235,6 @@ install_t install_jurassic(void) {
 
   /* initialisation */
   jl_init();
-  PL_on_halt(halt_julia, 0);
   checked_send_command_str("println(\" Done.\")");
 }
 
@@ -1400,5 +1395,11 @@ foreign_t jl_include(term_t term) {
     jl_throw_exception();
     PL_fail;
   }
+  PL_succeed;
+}
+
+/* halt embedding julia */
+foreign_t jl_embed_halt(void) {
+  jl_atexit_hook(0);
   PL_succeed;
 }

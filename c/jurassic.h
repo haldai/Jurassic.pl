@@ -43,5 +43,6 @@ foreign_t jl_send_command(term_t jl_expr);
 foreign_t jl_isdefined(term_t jl_expr);
 foreign_t jl_using(term_t term);
 foreign_t jl_include(term_t term);
+foreign_t jl_embed_halt(void);
 
 #endif /* _JURASSIC_H */

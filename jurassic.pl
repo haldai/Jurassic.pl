@@ -213,3 +213,10 @@ user:goal_expansion(In, Out) :-
     expand_inline_init(In, Out).
 
 :- load_foreign_library("lib/jurassic.so").
+:- at_halt(halt_hooks).
+
+halt_hooks :-
+    write("Halt embedded Julia ..."),
+    jl_embed_halt,
+    unload_foreign_library("lib/jurassic.so"),
+    writeln("Done").

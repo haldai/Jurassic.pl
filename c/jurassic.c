@@ -550,19 +550,26 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
       return NULL;
 
-    int k = 1; // the start position of quotenode in string
-    /*
-    if (sym_str[k] == '\'' || sym_str[k] == '\"') {
-      sym_str[strlen(sym_str)-2] = '\0';
-      k++;
-    } else
-      sym_str[strlen(sym_str)-1] = '\0'; // ignore the last ')'
-    */
+    int sym_len = strlen(sym_str);
+    int ks = 0; // the start position of quotenode in string
+    while ((sym_str[ks] == ':' || sym_str[ks] == '\'' || sym_str[ks] == '\"'
+            || sym_str[ks] == '(' || sym_str[ks] == ' ')
+           && ks <= sym_len-1) {
+      sym_str[ks] = '\0';
+      ks++;
+    }
+    int ke = ks;
+    while ((sym_str[ke] != '\'' || sym_str[ke] != '\"' || sym_str[ke] != ')')
+           && ke <= sym_len-1) {
+      ke++;
+    }
+    if (sym_str[ke] != '\0')
+      sym_str[ke] = '\0';
 #ifdef JURASSIC_DEBUG
-    printf("        Symbol (QuoteNode): %s.\n", sym_str+k);
+    printf("        Symbol (QuoteNode): %s. %d, %d\n", sym_str+ks, ks, ke);
 #endif
     // ignore the beginning ":("
-    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+k));
+    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+ks));
   } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */
     term_t macro_call = PL_new_term_ref();

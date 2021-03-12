@@ -5,7 +5,7 @@
 #include <SWI-Stream.h>
 #include <julia.h>
 
-//#define JURASSIC_DEBUG
+#define JURASSIC_DEBUG
 
 #define BUFFSIZE 4096
 

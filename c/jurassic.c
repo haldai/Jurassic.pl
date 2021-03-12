@@ -558,17 +558,16 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       sym_str[ks] = '\0';
       ks++;
     }
-    int ke = ks;
-    while ((sym_str[ke] != '\'' || sym_str[ke] != '\"' || sym_str[ke] != ')')
-           && ke <= sym_len-1) {
-      ke++;
+    for (int ke = ks;  ke < sym_len; ++ke) {
+      if (sym_str[ke] == '\'' || sym_str[ke] == '\"' || sym_str[ke] == ')'
+          || sym_str[ke] == ' ' || sym_str[ke] == ':') {
+        sym_str[ke] = '\0';
+        break;
+      }
     }
-    if (sym_str[ke] != '\0')
-      sym_str[ke] = '\0';
 #ifdef JURASSIC_DEBUG
-    printf("        Symbol (QuoteNode): %s. %d, %d\n", sym_str+ks, ks, ke);
+    printf("        Symbol (QuoteNode): \"%s\"\n", sym_str+ks);
 #endif
-    // ignore the beginning ":("
     return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+ks));
   } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */

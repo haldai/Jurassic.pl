@@ -16,7 +16,7 @@ luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
 
 Install SWI-Prolog and Julia, make sure `swipl-ld` and `julia` is in your `PATH`.
 
-- [SWI-Prolog](https://www.swi-prolog.org/)
+- [SWI-Prolog](https://www.swi-prolog.org/) (tested with swipl-8.2.3 in Archlinux's community repo. swipl-devel causes problem of freeing invalid pointer when halting)
 - [Julia](https://julialang.org/)
   
 This package is only tested on Linux, not sure if it will compile on MacOS

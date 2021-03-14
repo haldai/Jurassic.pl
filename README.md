@@ -17,7 +17,7 @@ luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
 Install SWI-Prolog and Julia, make sure `swipl-ld` and `julia` is in your `PATH`.
 
 - [SWI-Prolog](https://www.swi-prolog.org/) (tested with swipl-8.2.3 in Archlinux's community repo. swipl-devel causes problem of freeing invalid pointer when halting)
-- [Julia](https://julialang.org/)
+- [Julia](https://julialang.org/) (tested with julia-1.5.4)
   
 This package is only tested on Linux, not sure if it will compile on MacOS
 (maybe) or Windows (very unlikely).
@@ -206,14 +206,14 @@ true.
 ### Julia `ccall`
 
 One of the most fascinating features of Julia is it can call C/Fortran functions directly
-from shared libraries, i.e., the `ccall` function
+from shared libraries, i.e., the `ccall` function (use `QuoteNode` via `$x`)
 ([link](https://docs.julialang.org/en/v1/manual/calling-c-and-fortran-code/)).
 `Jurassic.pl` also supports it:
 
 ``` prolog
 % wrapping tuples with predicate tuple/1, passing datatypes (Int32) as atoms:
-?- := @show(ccall(tuple([:clock, "libc.so.6"]), 'Int32', tuple([]))).
-ccall((:clock, "libc.so.6"), Int32, ()) = 947332
+?- := @show(ccall(tuple([$clock, "libc.so.6"]), 'Int32', tuple([]))).
+ccall((:clock, "libc.so.6"), Int32, ()) = 1788465
 true.
 ```
 
@@ -270,6 +270,41 @@ symbol if it is defined variable; if failed, treat the symbol name as an atom:
 X = 1,
 Y = 2,
 Z = c.
+```
+
+__Remark__: `QuoteNode` and `Symbol` are different in Julia. In `Jurassic.pl`,
+symbols (`:x`) will be parsed as `Symbol` only and will be called by
+`jl_symbol_lookup` to access its value. For `QuoteNode` usage, you should use
+`$x$`. For example, in the `Tuple` example, to define a tuple contains symbol:
+
+``` prolog
+?- a := tuple([2.0, $'I\'m a quoted symbol']),
+     := @show(a).
+a = (2.0, Symbol("I''m a quoted symbol"))
+true.
+
+% wrong usage
+?- a := tuple([2.0, :'I\'m a quoted symbol']),
+     := @show(a).
+UndefVarError: I''m a quoted symbol not defined
+false.
+```
+
+However, meta-programming requires to use `Symbols` instead of `QuoteNodes`:
+
+``` prolog
+?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, 2, 3])]), 
+   := eval(X),
+   := @show(a).
+a = 6.
+X = jl_expr(: (=), [:a, jl_expr(:call, [*, 2, 3])]).
+
+% wrong usage
+:- X = jl_expr(:'=', [$a, jl_expr(:call, [*, 2, 3])]),
+   := eval(X), 
+   := @show(a).
+syntax: invalid assignment location ":a"
+false.
 ```
 
 In order to make the code less ambiguous, please use `QuoteNode` symbol "`:`" if
@@ -333,7 +368,7 @@ ERROR:    [9] <user>
 Tuples are defined with Prolog predicate `tuple/1`, whose argument is a list:
 
 ``` prolog
-?- a := tuple([1,"I'm string!", tuple([2.0, :'I\'m a quoted symbol'])]),
+?- a := tuple([1,"I'm string!", tuple([2.0, $'I\'m a quoted symbol'])]),
      := @show(a).
 a = (1, "I'm string!", (2.0, Symbol("I'm a quoted symbol")))
 true.
@@ -433,19 +468,18 @@ Julia expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
 `jl_expr/2`:
 
 ``` prolog
-?- X = jl_expr(:'=', [:b, jl_expr(:call, [+, 1, 1])]), := eval(X).
+% Expr(:call, +, 1, 1) form of "b = 1 + 1"
+?- X = jl_expr(:'=', [:b, jl_expr(:call, [+, 1, 1])]),
+   := eval(X),
+   := @show(b).
+b = 2
 X = jl_expr(: (=), [:b, jl_expr(:call, [+, 1, 1])]).
 
-?- := @show(a).
+?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, :b, :b])]), 
+   := eval(X),
+   := @show(a).
 a = 4
-true.
-
-?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, :b, :b])]), := eval(X).
 X = jl_expr(: (=), [:a, jl_expr(:call, [*, :b, :b])]).
-
-?- := @show(b).
-b = 2
-true.
 ```
 
 ## TODO: Multi-dimension Arrays
@@ -457,7 +491,7 @@ Dim}(Init, Size)` in Julia:
 true.
 
 ?- := @show(a[1,:,:]).
-a[1, :, :] = [0.0 0.0; 0.0 0.0]
+a[1, :, :] = [2.5e-322 0.0; 0.0 0.0]
 true.
 ```
 
@@ -470,7 +504,7 @@ New arrays can also be initialised with a Prolog predicate `jl_new_array/4` pred
 true.
 
 ?- := @show(a[1,:,:]).
-a[1, :, :] = [0 0; 0 0]
+a[1, :, :] = [34359738371 77309411345; 64424509449 140320876527618]
 true.
 ```
 

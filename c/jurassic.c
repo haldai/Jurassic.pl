@@ -6,7 +6,8 @@
 
 /* atoms for julia expressions */
 static functor_t FUNCTOR_dot2; /* subfields */
-static functor_t FUNCTOR_quote1; /* quotenode : */
+static functor_t FUNCTOR_quote1; /* quotesymbol : */
+static functor_t FUNCTOR_quotenode1; /* quotenode :(:) */
 static functor_t FUNCTOR_cmd1; /* julia command string */
 static functor_t FUNCTOR_inline2; /* inline functions */
 static functor_t FUNCTOR_field2; /* var.field */
@@ -120,6 +121,18 @@ static int list_length(term_t list) {
   default:
     assert(0);
   }
+}
+
+/* test if quote symbol x and y are paird */
+static int quote_pair(char x, char y) {
+  if (x == '\'' && y == '\'')
+    return 1;
+  else if (x == '\"' && y == '\"')
+    return 1;
+  else if (x == '(' && y == ')')
+    return 1;
+  else
+    return 0;
 }
 
 /* Evaluate Julia string (from julia/src/embedding.c) with checking,
@@ -562,8 +575,9 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     return (jl_expr_t *) checked_send_command_str(cmd_str);
   } else if (fname[0] == ':' && arity < 2) {
-    // return (jl_expr_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr));
     return (jl_expr_t *) pl2sym(expr);
+  } else if (PL_is_functor(expr, FUNCTOR_quotenode1) && arity < 2) {
+    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr));
   } else if (PL_is_functor(expr, FUNCTOR_expr2) && arity == 2) {
     // make an expression
     jl_expr_t *ex;
@@ -1051,7 +1065,7 @@ jl_sym_t * pl2sym(term_t term) {
     return NULL;
   }
   const char *fname = PL_atom_chars(functor);
-  if (fname[0] == ':' && arity < 2) {
+  if ((fname[0] == ':' || PL_is_functor(term, FUNCTOR_quotenode1)) && arity < 2) {
     char *sym_str;
     if (!PL_get_chars(term, &sym_str,
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
@@ -1059,21 +1073,20 @@ jl_sym_t * pl2sym(term_t term) {
 
     int sym_len = strlen(sym_str);
     int ks = 0, ke = 0; // the start and end positions of symbol in string
-    while ((sym_str[ks] == ':' || sym_str[ks] == '\'' || sym_str[ks] == '\"'
+    char quote;
+    while ((sym_str[ks] == '$' || sym_str[ks] == ':' || sym_str[ks] == '\'' || sym_str[ks] == '\"'
             || sym_str[ks] == '(' || sym_str[ks] == ' ')
            && ks <= sym_len-1) {
+      quote = sym_str[ks];
       sym_str[ks] = '\0';
       ks++;
     }
-    for (ke = ks;  ke < sym_len; ++ke) {
-      if (sym_str[ke] == '\'' || sym_str[ke] == '\"' || sym_str[ke] == ')' ||
-          sym_str[ke] == ' ' || sym_str[ke] == ':') {
+    for (ke = sym_len-1;  ke > ks; --ke) {
+      if (quote_pair(quote, sym_str[ke])) {
         sym_str[ke] = '\0';
         break;
       }
     }
-    for (int kz = ke; kz < sym_len; ++kz)
-      sym_str[kz] = '\0';
 #ifdef JURASSIC_DEBUG
     printf("        Symbol: \"%s\"\n", sym_str + ks);
 #endif
@@ -1282,6 +1295,7 @@ install_t install_jurassic(void) {
   ATOM_ninf = PL_new_atom("ninf");
   FUNCTOR_dot2 = PL_new_functor(ATOM_dot, 2);
   FUNCTOR_quote1 = PL_new_functor(PL_new_atom(":"), 1);
+  FUNCTOR_quotenode1 = PL_new_functor(PL_new_atom("$"), 1);
   FUNCTOR_cmd1 = PL_new_functor(PL_new_atom("cmd"), 1);
   FUNCTOR_field2 = PL_new_functor(PL_new_atom("jl_field"), 2);
   FUNCTOR_inline2 = PL_new_functor(PL_new_atom("jl_inline"), 2);

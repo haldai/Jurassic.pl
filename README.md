@@ -275,7 +275,7 @@ Z = c.
 __Remark__: `QuoteNode` and `Symbol` are different in Julia. In `Jurassic.pl`,
 symbols (`:x`) will be parsed as `Symbol` only and will be called by
 `jl_symbol_lookup` to access its value. For `QuoteNode` usage, you should use
-`$x$`. For example, in the `Tuple` example, to define a tuple contains symbol:
+`$x`. For example, in the `Tuple` example, to define a tuple contains symbol:
 
 ``` prolog
 ?- a := tuple([2.0, $'I\'m a quoted symbol']),

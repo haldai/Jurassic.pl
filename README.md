@@ -481,6 +481,11 @@ expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
 b = :(1 + 1)
 X = jl_expr(: (=), [:b, jl_expr(:call, [+, 1, 1])]).
 
+?- := c = eval(b), 
+   := @show(c).
+c = 2
+true.
+
 ?- a := jl_expr(:call, [*, :b, :b]), 
    := @show(a).
 a = :(b * b)

@@ -217,7 +217,7 @@ static int jl_assign_var(const char *var, jl_value_t *val) {
 }
 
 /* Assign Julia expression arguments with Prolog list */
-static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t len) {
+static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t len, int quotenode) {
   term_t arg_term = PL_new_term_ref();
   term_t list_ = PL_copy_term_ref(list);
   size_t i = start;
@@ -231,7 +231,11 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
         return JURASSIC_FAIL;
       printf("%s.\n", str_arg);
 #endif
-      jl_expr_t *a_i = compound_to_jl_expr(arg_term);
+      jl_expr_t *a_i;
+      if (!quotenode)
+        a_i = compound_to_jl_expr(arg_term);
+      else
+        a_i = (jl_expr_t *) jl_new_struct(jl_quotenode_type, compound_to_jl_expr(arg_term));
       if (a_i == NULL) {
         printf("[ERR] Convert term argument %lu failed!\n", i);
         return JURASSIC_FAIL;
@@ -497,7 +501,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     /* use :vect as head, list members as arguments */
     jl_expr_t *ex = jl_exprn(jl_symbol("vect"), len);
-    if (!list_to_expr_args(expr, &ex, 0, len))
+    if (!list_to_expr_args(expr, &ex, 0, len, 0))
       return NULL;
 #ifdef JURASSIC_DEBUG
     jl_static_show(JL_STDOUT, (jl_value_t *) ex);
@@ -579,32 +583,45 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
   } else if (PL_is_functor(expr, FUNCTOR_quotenode1) && arity < 2) {
     return (jl_expr_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr));
   } else if (PL_is_functor(expr, FUNCTOR_expr2) && arity == 2) {
-    // make an expression
+    // make an expression (:call, :Expr, QuoteNode_pred, QuoteNode_args)
     jl_expr_t *ex;
 
-    // expr head
+    // expr pred
     term_t expr_pred = PL_new_term_ref();
     if (!PL_get_arg(1, expr, expr_pred)) {
       printf("[ERR] Cannot access the first argument!\n");
       return NULL;
     }
-    jl_sym_t *expr_pred_sym = pl2sym(expr_pred);
-
     // expr args
     term_t expr_args = PL_new_term_ref();
     if (!PL_get_arg(2, expr, expr_args)) {
       printf("[ERR] Cannot access the second argument as a list!\n");
-      JL_GC_POP();
       return NULL;
     }
     size_t len = list_length(expr_args);
-    {
-      ex = jl_exprn(expr_pred_sym, len);
-      JL_GC_PUSH1(&ex);
 #ifdef JURASSIC_DEBUG
       printf("        Functor: Expression with %lu args.\n", len);
 #endif
-      if (!list_to_expr_args(expr_args, &ex, 0, len)) {
+    ex = jl_exprn(jl_symbol("call"), len + 2); // head Symbol(call)
+    JL_GC_PUSH1(&ex);
+
+    if (!jl_set_jl_arg(&ex, 0, (jl_value_t *) jl_symbol("Expr"))) { // arg0 Symbol("Expr")
+      JL_GC_POP();
+      return NULL;
+    }
+    {
+      // arg1 QuoteNode(pred)
+      jl_value_t *expr_pred_qn = (jl_value_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr_pred));
+      JL_GC_PUSH1(&expr_pred_qn);
+
+      if (!jl_set_jl_arg(&ex, 1, expr_pred_qn)) {
+        JL_GC_POP();
+        JL_GC_POP();
+        return NULL;
+      }
+
+      if (!list_to_expr_args(expr_args, &ex, 2, len, 1)) {
+        JL_GC_POP();
         JL_GC_POP();
         return NULL;
       }
@@ -699,7 +716,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       JL_GC_PUSH1(&ex);
       jl_exprargset(ex, 0, compound_to_jl_expr(collection)); /* first argument is the collection */
       /* following arguments are references */
-      if (!list_to_expr_args(list, &ex, 1, len)) {
+      if (!list_to_expr_args(list, &ex, 1, len, 0)) {
         JL_GC_POP();
         return NULL;
       }
@@ -723,7 +740,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     /* use :tuple as head, list members as arguments */
     jl_expr_t *ex = jl_exprn(jl_symbol("tuple"), len);
     JL_GC_PUSH1(&ex);
-    if (!list_to_expr_args(list, &ex, 0, len)) {
+    if (!list_to_expr_args(list, &ex, 0, len, 0)) {
       JL_GC_POP();
       return NULL;
     }

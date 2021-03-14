@@ -296,7 +296,7 @@ However, meta-programming requires to use `Symbols` instead of `QuoteNodes`:
 ?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, 2, 3])]), 
    := eval(X),
    := @show(a).
-a = 6.
+a = :(2 * 3)
 X = jl_expr(: (=), [:a, jl_expr(:call, [*, 2, 3])]).
 
 % wrong usage
@@ -404,10 +404,14 @@ true.
 ?- a := 1.
 true.
 
-?- X := [a, :a].
+?- X := [a, $a].
 X = [1, :a].
 
 ?- X := tuple([1+1, :a]).
+X = tuple([2, 1]).
+
+% TODO $a should be :a
+?- X := tuple([1+1, $a]).
 X = tuple([2, 1]).
 ```
 
@@ -464,7 +468,9 @@ X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172,
 ```
 
 ## Meta-Programming
-Julia expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
+Julia supports
+[meta-programming](https://docs.julialang.org/en/v1/manual/metaprogramming/),
+expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
 `jl_expr/2`:
 
 ``` prolog
@@ -472,14 +478,13 @@ Julia expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
 ?- X = jl_expr(:'=', [:b, jl_expr(:call, [+, 1, 1])]),
    := eval(X),
    := @show(b).
-b = 2
+b = :(1 + 1)
 X = jl_expr(: (=), [:b, jl_expr(:call, [+, 1, 1])]).
 
-?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, :b, :b])]), 
-   := eval(X),
+?- a := jl_expr(:call, [*, :b, :b]), 
    := @show(a).
-a = 4
-X = jl_expr(: (=), [:a, jl_expr(:call, [*, :b, :b])]).
+a = :(b * b)
+true.
 ```
 
 ## TODO: Multi-dimension Arrays

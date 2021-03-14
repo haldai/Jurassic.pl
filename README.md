@@ -428,6 +428,26 @@ Following is an example of using `->>`:
 X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172, 15.707963267948966].
 ```
 
+## Meta-Programming
+Julia expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
+`jl_expr/2`:
+
+``` prolog
+?- X = jl_expr(:'=', [:b, jl_expr(:call, [+, 1, 1])]), := eval(X).
+X = jl_expr(: (=), [:b, jl_expr(:call, [+, 1, 1])]).
+
+?- := @show(a).
+a = 4
+true.
+
+?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, :b, :b])]), := eval(X).
+X = jl_expr(: (=), [:a, jl_expr(:call, [*, :b, :b])]).
+
+?- := @show(b).
+b = 2
+true.
+```
+
 ## TODO: Multi-dimension Arrays
 Array can be initialised with function `array`, which is equal to `Array{Type,
 Dim}(Init, Size)` in Julia:

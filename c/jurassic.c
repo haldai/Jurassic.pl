@@ -18,6 +18,7 @@ static functor_t FUNCTOR_minusqual2; /* -= */
 static functor_t FUNCTOR_timesequal2; /* *= */
 static functor_t FUNCTOR_dividesequal2; /* /= */
 static functor_t FUNCTOR_powerequal2; /* ^= */
+static functor_t FUNCTOR_expr2; /* jl_expr(head, args) make a julia expression for meta-programming*/
 static atom_t ATOM_true;
 static atom_t ATOM_false;
 static atom_t ATOM_nan;
@@ -510,13 +511,29 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
     printf("        Field of variable:\n");
 #endif
+    // TODO field symbol should be quotenode!!
     jl_expr_t *ex = jl_exprn((jl_sym_t *) jl_symbol("."), arity);
     JL_GC_PUSH1(&ex);
     /* assign the two arguments */
-    if (!jl_set_args(&ex, expr, arity, 0, 1)) {
+
+    term_t arg1_term = PL_new_term_ref();
+    term_t arg2_term = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, arg1_term) || !PL_get_arg(2, expr, arg2_term)) {
+      printf("[ERR] Get field term arguments failed!\n");
       JL_GC_POP();
       return NULL;
     }
+#ifdef JURASSIC_DEBUG
+    char *str_arg1, *str_arg2;
+    if (!PL_get_chars(arg1_term, &str_arg1,
+                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8) ||
+        !PL_get_chars(arg2_term, &str_arg2,
+                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+      return JURASSIC_FAIL;
+    printf("------- %s.%s\n", str_arg1, str_arg2);
+#endif
+    jl_exprargset(ex, 0, compound_to_jl_expr(arg1_term));
+    jl_exprargset(ex, 1, (jl_expr_t *) jl_new_struct(jl_quotenode_type, compound_to_jl_expr(arg2_term)));
 #ifdef JURASSIC_DEBUG
     jl_static_show(JL_STDOUT, (jl_value_t *) ex);
     jl_printf(JL_STDOUT, "\n");
@@ -545,30 +562,46 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #endif
     return (jl_expr_t *) checked_send_command_str(cmd_str);
   } else if (fname[0] == ':' && arity < 2) {
-    char *sym_str;
-    if (!PL_get_chars(expr, &sym_str,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
-      return NULL;
+    // return (jl_expr_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr));
+    return (jl_expr_t *) pl2sym(expr);
+  } else if (PL_is_functor(expr, FUNCTOR_expr2) && arity == 2) {
+    // make an expression
+    jl_expr_t *ex;
 
-    int sym_len = strlen(sym_str);
-    int ks = 0; // the start position of quotenode in string
-    while ((sym_str[ks] == ':' || sym_str[ks] == '\'' || sym_str[ks] == '\"'
-            || sym_str[ks] == '(' || sym_str[ks] == ' ')
-           && ks <= sym_len-1) {
-      sym_str[ks] = '\0';
-      ks++;
+    // expr head
+    term_t expr_pred = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, expr_pred)) {
+      printf("[ERR] Cannot access the first argument!\n");
+      return NULL;
     }
-    for (int ke = ks;  ke < sym_len; ++ke) {
-      if (sym_str[ke] == '\'' || sym_str[ke] == '\"' || sym_str[ke] == ')'
-          || sym_str[ke] == ' ' || sym_str[ke] == ':') {
-        sym_str[ke] = '\0';
-        break;
-      }
+    jl_sym_t *expr_pred_sym = pl2sym(expr_pred);
+
+    // expr args
+    term_t expr_args = PL_new_term_ref();
+    if (!PL_get_arg(2, expr, expr_args)) {
+      printf("[ERR] Cannot access the second argument as a list!\n");
+      JL_GC_POP();
+      return NULL;
     }
+    size_t len = list_length(expr_args);
+    {
+      ex = jl_exprn(expr_pred_sym, len);
+      JL_GC_PUSH1(&ex);
 #ifdef JURASSIC_DEBUG
-    printf("        Symbol (QuoteNode): \"%s\"\n", sym_str+ks);
+      printf("        Functor: Expression with %lu args.\n", len);
 #endif
-    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, jl_symbol(sym_str+ks));
+      if (!list_to_expr_args(expr_args, &ex, 0, len)) {
+        JL_GC_POP();
+        return NULL;
+      }
+#ifdef JURASSIC_DEBUG
+      jl_static_show(JL_STDOUT, (jl_value_t *)ex);
+      jl_printf(JL_STDOUT, "\n");
+#endif
+      JL_GC_POP();
+    }
+    JL_GC_POP();
+    return ex;
   } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */
     term_t macro_call = PL_new_term_ref();
@@ -1007,6 +1040,50 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
   return JURASSIC_SUCCESS;
 }
 
+/* convert Prolog term to Julia symbol */
+jl_sym_t * pl2sym(term_t term) {
+  atom_t functor;
+  size_t arity;
+  if (!PL_get_compound_name_arity_sz(term, &functor, &arity)) {
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Cannot analyse compound!\n");
+#endif
+    return NULL;
+  }
+  const char *fname = PL_atom_chars(functor);
+  if (fname[0] == ':' && arity < 2) {
+    char *sym_str;
+    if (!PL_get_chars(term, &sym_str,
+                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+      return NULL;
+
+    int sym_len = strlen(sym_str);
+    int ks = 0, ke = 0; // the start and end positions of symbol in string
+    while ((sym_str[ks] == ':' || sym_str[ks] == '\'' || sym_str[ks] == '\"'
+            || sym_str[ks] == '(' || sym_str[ks] == ' ')
+           && ks <= sym_len-1) {
+      sym_str[ks] = '\0';
+      ks++;
+    }
+    for (ke = ks;  ke < sym_len; ++ke) {
+      if (sym_str[ke] == '\'' || sym_str[ke] == '\"' || sym_str[ke] == ')' ||
+          sym_str[ke] == ' ' || sym_str[ke] == ':') {
+        sym_str[ke] = '\0';
+        break;
+      }
+    }
+    for (int kz = ke; kz < sym_len; ++kz)
+      sym_str[kz] = '\0';
+#ifdef JURASSIC_DEBUG
+    printf("        Symbol: \"%s\"\n", sym_str + ks);
+#endif
+    return jl_symbol(sym_str + ks);
+  } else {
+    printf("[ERR] Term is not a symbol!\n");
+    return NULL;
+  }
+}
+
 /* Unify julia term with prolog term */
 int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #ifdef JURASSIC_DEBUG
@@ -1216,6 +1293,7 @@ install_t install_jurassic(void) {
   FUNCTOR_timesequal2 = PL_new_functor(PL_new_atom("*="), 2);
   FUNCTOR_dividesequal2 = PL_new_functor(PL_new_atom("/="), 2);
   FUNCTOR_powerequal2 = PL_new_functor(PL_new_atom("^="), 2);
+  FUNCTOR_expr2 = PL_new_functor(PL_new_atom("jl_expr"), 2);
 
   /* Registration */
   PL_register_foreign("jl_eval_str", 2, jl_eval_str, 0);

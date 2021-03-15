@@ -538,10 +538,10 @@ true.
 Moreover, `jl_expr/2` can be used for constructing nested AST expressions:
 
 ``` prolog
-?- X1 = jl_expr(:call, [:(+), :a, 2]), 
+?- X1 = jl_expr(:call, [:(+), :a, 2]),
    X2 = jl_expr(:call, [:(*), X1, :a]),
-   := @show(eval(X1)).
-eval(a + 2) = 4
+   := @show(eval(X2)).
+eval((a + 2) * a) = 8
 X1 = jl_expr(:call, [: (+), :a, 2]),
 X2 = jl_expr(:call, [: (*), jl_expr(:call, [: (+), :a, 2]), :a]).
 ```

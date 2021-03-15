@@ -39,6 +39,8 @@ Load `jurassic` module in SWI-Prolog:
 ``` prolog
 ?- use_module(jurassic).
 
+%% or consult jurassic.pl directly.
+?- ['jurassic.pl'].
 ```
 
 ## Julia Expressions
@@ -302,10 +304,10 @@ AST node that won't get evaluated (stored as `Expr`), while `Symbol` will be
 accessed when calling `jl_toplevel_eval` in Julia's main module.
 
 __Remark__: In `Jurassic.pl`, symbols (`:x`) will be parsed as `Symbol` only;
-for `QuoteNode` usage, you should use `$x` (or `$(x)`). When unifying Prolog
-term and Julia atom with "`:=/2`", `Symbol` will be evaluated; while unification
-with "`=/2`" won't evaluate symbols. For example, in the `Tuple` example, to
-define a tuple contains symbol:
+for `QuoteNode` usage, you should use `$x` (or `$(x)`). When unifying a Prolog
+term and a Julia atom with "`:=/2`", `Symbol` will be evaluated automatically;
+while unification with "`=/2`" won't evaluate symbols. For example, in the
+`Tuple` example, to define a tuple contains symbols:
 ``` prolog
 ?- a := tuple([2.0, $'I\'m a quoted symbol']),
      := @show(a).

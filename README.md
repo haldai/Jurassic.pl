@@ -386,9 +386,10 @@ true.
 ```
 
 __Remark__: Tuples are *always* evaluated before unification, lists are not.
-When unifying `X := tuple([$a])`, the `tuple/1` predicate will be evaluated to
-Julia `Tuple(:a)`, then `:=/2` will access the value of variable `:a` by
-default. To make sure of unifying `Symbol`, please use double `QuoteNode` operators `$($a)`:
+When unifying `X := tuple([$a])`, the stuff in `tuple/1` will be evaluated by 
+Julia, so `:=/2` will try to access the value of variable `:a` by
+default. To make sure of unifying `Symbol`, please use `QuoteNode` operators
+`$a` to avoid evaluation:
 
 ``` prolog
 ?- a := 1.
@@ -398,14 +399,14 @@ true.
 X = [1, :a].
 
 ?- X := tuple([1+1, :a]).
-X = tuple([2, 1]).
+UndefVarError: a not defined
+false.
 
 ?- X := tuple([1+1, $a]).
-X = tuple([2, 1]).
+X = tuple([2, :a]).
 
-% using $($a) to unify :a
 ?- X := tuple([1+1, $($a)]).
-X = tuple([2, 1]).
+X = tuple([2, $a]).
 ```
 
 Keyword assignments in a function call are represented by the `kw/2` predicate:

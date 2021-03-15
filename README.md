@@ -300,8 +300,9 @@ false.
 ### `QuoteNode` and `Symbol`
 
 `QuoteNode` and `Symbol` are different in Julia. `QuoteNode` is an
-AST node that won't get evaluated (stored as `Expr`), while `Symbol` will be
-accessed when calling `jl_toplevel_eval` in Julia's main module.
+[AST](https://docs.julialang.org/en/v1/devdocs/ast/#Julia-ASTs) node that won't
+get evaluated (stored as `Expr`), while `Symbol` will be accessed when calling
+`jl_toplevel_eval` in Julia's main module.
 
 __Remark__: In `Jurassic.pl`, symbols (`:x`) will be parsed as `Symbol` only;
 for `QuoteNode` usage, you should use `$x` (or `$(x)`). When unifying a Prolog
@@ -478,8 +479,8 @@ Expr
     3: Symbol a
 ```
 
-In `Jurassic.pl`, it will be represented as `jl_expr(:call, +, 1, :a)` or
-`jl_expr(:call, :(+), 1, :a)`. However, because "`:=/2`" will automatically
+In `Jurassic.pl`, it will be represented as `jl_expr(:call, [+, 1, :a])` or
+`jl_expr(:call, [:(+), 1, :a])`. However, because "`:=/2`" will automatically
 evaluate symbols in the expressions, directly assigning an atom with `Expr` will
 cause errors:
 

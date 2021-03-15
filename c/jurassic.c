@@ -582,8 +582,17 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     printf("        Command string: %s.\n", cmd_str);
 #endif
     return (jl_expr_t *) checked_send_command_str(cmd_str);
-  } else if (fname[0] == ':' && arity < 2) {
-    return (jl_expr_t *) pl2sym(expr);
+  } else if (PL_is_functor(expr, FUNCTOR_quote1) && arity < 2) {
+    term_t expr_arg = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, expr_arg)) {
+      printf("[ERR] Reading quoted symbol failed!\n");
+      return NULL;
+    }
+    if (PL_is_compound(expr_arg)) {
+      // QuoteNode?
+      return (jl_expr_t *) jl_new_struct(jl_quotenode_type, compound_to_jl_expr(expr_arg));
+    } else if (PL_is_atom(expr_arg))
+      return (jl_expr_t *) pl2sym(expr);
   } else if (PL_is_functor(expr, FUNCTOR_quotenode1) && arity < 2) {
     // fetch the argument
     term_t arg_term = PL_new_term_ref();
@@ -1239,16 +1248,17 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     return PL_unify_string_chars(tmp_term, retval);
   } else if (jl_is_quotenode(val)) {
 #ifdef JURASSIC_DEBUG
-    printf("        QuoteNode: ");
+    printf("        QuoteNode of ");
 #endif
-    const char *retval = jl_symbol_name((jl_sym_t *) jl_quotenode_value(val));
+    jl_value_t *quotedval = jl_quotenode_value(val);
 #ifdef JURASSIC_DEBUG
-    printf(":%s.\n", retval);
+    jl_static_show(JL_STDOUT, (jl_value_t *) quotedval);
+    printf(".\n");
 #endif
-    term_t qname = PL_new_term_ref();
-    return PL_put_atom(qname, PL_new_atom(retval)) &&
-      PL_unify_functor(tmp_term, FUNCTOR_quotenode1) &&
-      PL_unify_arg(1, tmp_term, qname);
+    term_t qval = PL_new_term_ref();
+    return jl_unify_pl(quotedval, &qval)
+      && PL_unify_functor(tmp_term, FUNCTOR_quotenode1)
+      && PL_unify_arg(1, tmp_term, qval);
   } else if (jl_is_symbol(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Symbol (Atom): ");

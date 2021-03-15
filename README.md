@@ -316,9 +316,9 @@ a = (2.0, Symbol("I''m a quoted symbol"))
 true.
 
 % wrong usage
-?- a := tuple([2.0, :'I\'m a quoted symbol']),
+?- a := tuple([2.0, :'I\'m a quoted symbol will be evaluated']),
      := @show(a).
-UndefVarError: I''m a quoted symbol not defined
+UndefVarError: I''m a quoted symbol  will be evaluated not defined
 false.
 
 ?- a := array('Int64', undef, 2, 2).
@@ -385,29 +385,26 @@ a = -2
 true.
 ```
 
-__Remark__: Tuples are *always* evaluated before unification, lists are not.
-When unifying `X := tuple([$a])`, the stuff in `tuple/1` will be evaluated by 
-Julia, so `:=/2` will try to access the value of variable `:a` or `$a` by
-default:
+__Remark__: Symbols in lists and tuples are *always* evaluated before
+`:=/2` unification, and their behaviours are different:
 
 ``` prolog
 ?- a := 1.
 true.
 
-?- X := [a, $a].
-X = [1, $a].
+?- X := [a, :a, $a, :(:a), $($a)].
+X = [1, 1, $1, $1, $ ($1)].
 
-?- X := tuple([a, :a]).
-X = tuple([1, 1]).
+%% behaviour of tuple is different to list
+?- X := tuple([a, :a, $a, :(:a), $($a)]).
+X = tuple([1, 1, 1, 1, $1]).
 
-?- X := tuple([1+1, :a]).
-X = tuple([2, 1]).
+%% nothing will change under =/2 unification
+?- X = [a, :a, $a, :(:a), $($a)].
+X = [a, :a, $a, : (:a), $ ($a)].
 
-?- X := tuple([1+1, $a]).
-X = tuple([2, 1]).
-
-?- X := tuple([1+1, $($a)]).
-X = tuple([2, $a]).
+?- X = tuple([a, :a, $a, :(:a), $($a)]).
+X = tuple([a, :a, $a, : (:a), $ ($a)]).
 ```
 
 Keyword assignments in a function call are represented by the `kw/2` predicate:
@@ -487,9 +484,23 @@ evaluate symbols in the expressions, directly assigning an atom with `Expr` will
 cause errors:
 
 ``` prolog
+?- jl_isdefined(a).
+false.
+
 ?- e := jl_expr(:call, [+, 1, :a]).
 UndefVarError: a not defined
 false.
+
+%% if a is defined
+?- a := 2, 
+   e := jl_expr(:call, [+, 1, :a]).
+true.
+
+%% instead of assigning a Expr, it assigns the evaluated results
+?- := @show(e).
+e = 3
+true.
+
 ```
 
 To assign a variable with value of Julia `Expr` via `:=/2`, please use the
@@ -499,7 +510,13 @@ To assign a variable with value of Julia `Expr` via `:=/2`, please use the
 ?- e := $jl_expr(:call, [+, 1, :a]).
 true.
 
+%% explicitly claim "+" is a symbol with :/1
 ?- e := $jl_expr(:call, [:(+), 1, :a]).
+true.
+
+?- := 'Meta'.show_sexpr(e), 
+   nl.
+(:call, :+, 1, :a)
 true.
 
 %% evaluate the expression e (will fail because a is not defined)
@@ -568,12 +585,12 @@ A = [: (+), 1, :b].
 
 %% unify with nested expressions
 ?- X1 = jl_expr(:call, [:(+), :a, 2]),
-   e $= jl_expr(:call, [:(*), X1, :a]).
+    e $= jl_expr(:call, [:(*), X1, :a]).
 X1 = jl_expr(:call, [: (+), :a, 2]).
 
 ?- X := e, writeln(X).
-jl_expr(:call,[: (*),jl_expr(:call,[: (+),jl_expr(:call,[: (+),1,:b]),2]),jl_expr(:call,[: (+),1,:b])])
-X = jl_expr(:call, [: (*), jl_expr(:call, [: (+), jl_expr(:call, [: (+), 1|...]), 2]), jl_expr(:call, [: (+), 1, :b])]).
+jl_expr(:call,[: (*),jl_expr(:call,[: (+),:a,2]),:a])
+X = jl_expr(:call, [: (*), jl_expr(:call, [: (+), :a, 2]), :a]).
 ```
 
 ## TODO: Multi-dimension Arrays

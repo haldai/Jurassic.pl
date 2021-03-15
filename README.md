@@ -389,15 +389,15 @@ __Remark__: Symbols in lists and tuples are *always* evaluated before
 `:=/2` unification, and their behaviours are different:
 
 ``` prolog
-?- a := 1.
+?- a:=1.
 true.
 
 ?- X := [a, :a, $a, :(:a), $($a)].
-X = [1, 1, $1, $1, $ ($1)].
+X = [1, 1, $ (:a), $ (:a), $ ($ (:a))].
 
 %% behaviour of tuple is different to list
 ?- X := tuple([a, :a, $a, :(:a), $($a)]).
-X = tuple([1, 1, 1, 1, $1]).
+X = tuple([1, 1, :a, :a, $ (:a)]).
 
 %% nothing will change under =/2 unification
 ?- X = [a, :a, $a, :(:a), $($a)].

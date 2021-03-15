@@ -25,7 +25,7 @@ jl_expr_t * compound_to_jl_expr(term_t expr);
 int pl2jl(term_t term, jl_value_t **ret, int flag_sym);
 jl_sym_t * pl2sym(term_t term);
 /* Convert (unify Julia value with Prolog term) */
-int jl_unify_pl(jl_value_t *val, term_t *ret);
+int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym);
 /* Set Julia expression "*ex"'s arguments with Prolog term "expr"'s arguments,
    in total of "arity" arguments, starting from start_jl and start_pl respectively.
    FIXME: GC issue? */

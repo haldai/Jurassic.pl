@@ -345,7 +345,7 @@ static int jl_tuple_ref_unify(term_t *pl_term, jl_value_t *val, size_t idx) {
         PL_fail;
       return jl_assign_var(atom, v);
   } else
-    return jl_unify_pl(v, pl_term);
+    return jl_unify_pl(v, pl_term, 1);
   return JURASSIC_FAIL;
 }
 
@@ -1133,7 +1133,7 @@ jl_sym_t * pl2sym(term_t term) {
 }
 
 /* Unify julia term with prolog term */
-int jl_unify_pl(jl_value_t *val, term_t *ret) {
+int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
 #ifdef JURASSIC_DEBUG
   printf("[Debug] Julia value:\n");
   jl_static_show(JL_STDOUT, val);
@@ -1256,7 +1256,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     printf(".\n");
 #endif
     term_t qval = PL_new_term_ref();
-    return jl_unify_pl(quotedval, &qval)
+    return jl_unify_pl(quotedval, &qval, 1)
       && PL_unify_functor(tmp_term, FUNCTOR_quotenode1)
       && PL_unify_arg(1, tmp_term, qval);
   } else if (jl_is_symbol(val)) {
@@ -1268,15 +1268,16 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     printf("%s.\n", retval);
 #endif
     if (strchr(retval, '.') != NULL) {
-      return jl_unify_pl(jl_dot(retval), &tmp_term);
-    } else if (jl_is_defined(retval) && !jl_is_operator((char *)retval)) {
+      return jl_unify_pl(jl_dot(retval), &tmp_term, flag_sym);
+    } else if (jl_is_defined(retval) && !jl_is_operator((char *)retval)
+               && !flag_sym) {
 #ifdef JURASSIC_DEBUG
       printf("--- is defined.\n");
 #endif
       jl_value_t *var_val;
       if (!jl_access_var(retval, &var_val))
         return JURASSIC_FAIL;
-      return jl_unify_pl(var_val, &tmp_term);
+      return jl_unify_pl(var_val, &tmp_term, flag_sym);
     } else {
       /* unify with :/1 */
       term_t symname = PL_new_term_ref();
@@ -1303,7 +1304,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
           printf("---- #%lu:\n", i);
 #endif
           if (!PL_unify_list(tmp_term, head, tmp_term) ||
-              !jl_unify_pl(jl_arrayref((jl_array_t *)val, i), &head))
+              !jl_unify_pl(jl_arrayref((jl_array_t *)val, i), &head, flag_sym))
             return JURASSIC_FAIL;
         }
         return PL_unify_nil(tmp_term);
@@ -1328,11 +1329,11 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
     jl_array_t *args = ((jl_expr_t *)val)->args;
 
     term_t head_term = PL_new_term_ref();
-    if (!jl_unify_pl((jl_value_t *)head, &head_term))
+    if (!jl_unify_pl((jl_value_t *)head, &head_term, 1))
       return JURASSIC_FAIL;
 
     term_t args_term = PL_new_term_ref();
-    if (!jl_unify_pl((jl_value_t *)args, &args_term))
+    if (!jl_unify_pl((jl_value_t *)args, &args_term, 1))
       return JURASSIC_FAIL;
 
     return PL_unify_functor(tmp_term, FUNCTOR_expr2)
@@ -1408,7 +1409,7 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
     jl_static_show(JL_STDOUT, ret);
     jl_printf(JL_STDOUT, "\n");
 #endif
-    if (!jl_unify_pl(ret, &pl_ret)) {
+    if (!jl_unify_pl(ret, &pl_ret, 0)) {
       JL_GC_POP();
       PL_fail;
     }
@@ -1432,7 +1433,7 @@ foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
   if (!checked_eval_string(expression, &ret))
     PL_fail;
   JL_GC_PUSH1(&ret);
-  if (!jl_unify_pl(ret, &pl_ret)) {
+  if (!jl_unify_pl(ret, &pl_ret, 1)) {
     JL_GC_POP();
     PL_fail;
   } else {

@@ -526,9 +526,12 @@ To simplify the expression construction, `Jurassic.pl` provides a predicate
    := @show(e),
    := 'Meta'.show_sexpr(e), 
    := @show(eval(e)).
-e = :(a + 2) % @show(e)
-(:call, :+, :a, 2) % Meta.show_sexpr(e)
-eval(e) = 4 % @show(eval(e))
+% @show(e)
+e = :(a + 2)
+% Meta.show_sexpr(e)
+(:call, :+, :a, 2)
+% @show(eval(e))
+eval(e) = 4
 true.
 ```
 

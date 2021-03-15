@@ -549,6 +549,31 @@ X1 = jl_expr(:call, [: (+), :a, 2]),
 X2 = jl_expr(:call, [: (*), jl_expr(:call, [: (+), :a, 2]), :a]).
 ```
 
+### Unify Prolog terms with Julia `Expr`
+
+Prolog terms can also unify with Julia AST expressions:
+
+``` prolog
+?- a $= jl_expr(:call, [+, 1, :b]).
+true.
+
+?- X := a.
+X = jl_expr(:call, [: (+), 1, :b]).
+
+?- jl_expr(H, A) := a.
+H = :call,
+A = [: (+), 1, :b].
+
+%% unify with nested expressions
+?- X1 = jl_expr(:call, [:(+), :a, 2]),
+   e $= jl_expr(:call, [:(*), X1, :a]).
+X1 = jl_expr(:call, [: (+), :a, 2]).
+
+?- X := e, writeln(X).
+jl_expr(:call,[: (*),jl_expr(:call,[: (+),jl_expr(:call,[: (+),1,:b]),2]),jl_expr(:call,[: (+),1,:b])])
+X = jl_expr(:call, [: (*), jl_expr(:call, [: (+), jl_expr(:call, [: (+), 1|...]), 2]), jl_expr(:call, [: (+), 1, :b])]).
+```
+
 ## TODO: Multi-dimension Arrays
 Array can be initialised with function `array`, which is equal to `Array{Type,
 Dim}(Init, Size)` in Julia:

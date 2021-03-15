@@ -42,7 +42,8 @@
 ':='(X) :-
     jl_send_command(X).
 /* Binary */
-':='(Y, X) :- % assign function returns to a tuple
+':='(Y, X) :-
+    % assign function returns to a tuple
     compound(Y), Y = tuple(Z),
     jl_tuple_unify(tuple(Z), X), !.
 ':='(Y, X) :-

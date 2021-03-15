@@ -390,6 +390,10 @@ static int jl_tuple_unify_all(term_t *pl_tuple, jl_value_t *val) {
     return JURASSIC_FAIL;
 }
 
+static int jl_expr_unify_all(term_t *pl_head, term_t *pl_args, jl_value_t *val) {
+
+}
+
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Dynamic functions
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -1243,7 +1247,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #endif
     term_t qname = PL_new_term_ref();
     return PL_put_atom(qname, PL_new_atom(retval)) &&
-      PL_unify_functor(tmp_term, FUNCTOR_quote1) &&
+      PL_unify_functor(tmp_term, FUNCTOR_quotenode1) &&
       PL_unify_arg(1, tmp_term, qname);
   } else if (jl_is_symbol(val)) {
 #ifdef JURASSIC_DEBUG
@@ -1255,7 +1259,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #endif
     if (strchr(retval, '.') != NULL) {
       return jl_unify_pl(jl_dot(retval), &tmp_term);
-    } else if (jl_is_defined(retval)) {
+    } else if (jl_is_defined(retval) && !jl_is_operator((char *)retval)) {
 #ifdef JURASSIC_DEBUG
       printf("--- is defined.\n");
 #endif
@@ -1263,8 +1267,13 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
       if (!jl_access_var(retval, &var_val))
         return JURASSIC_FAIL;
       return jl_unify_pl(var_val, &tmp_term);
-    } else
-      return PL_unify_atom_chars(tmp_term, retval);
+    } else {
+      /* unify with :/1 */
+      term_t symname = PL_new_term_ref();
+      return PL_put_atom(symname, PL_new_atom(retval))
+        && PL_unify_functor(tmp_term, FUNCTOR_quote1)
+        && PL_unify_arg(1, tmp_term, symname);
+    }
   } else if (jl_is_array(val)) {
     if (jl_array_ndims(val) == 1) {
 #ifdef JURASSIC_DEBUG
@@ -1300,6 +1309,25 @@ int jl_unify_pl(jl_value_t *val, term_t *ret) {
 #endif
     /* Tuple */
     return PL_unify_functor(tmp_term, FUNCTOR_tuple1) && jl_tuple_unify_all(&tmp_term, val);
+  } else if (jl_is_expr(val)) {
+    /* Expr */
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Expr:\n");
+#endif
+    jl_sym_t *head = ((jl_expr_t *)val)->head;
+    jl_array_t *args = ((jl_expr_t *)val)->args;
+
+    term_t head_term = PL_new_term_ref();
+    if (!jl_unify_pl((jl_value_t *)head, &head_term))
+      return JURASSIC_FAIL;
+
+    term_t args_term = PL_new_term_ref();
+    if (!jl_unify_pl((jl_value_t *)args, &args_term))
+      return JURASSIC_FAIL;
+
+    return PL_unify_functor(tmp_term, FUNCTOR_expr2)
+      && PL_unify_arg(1, tmp_term, head_term)
+      && PL_unify_arg(2, tmp_term, args_term);
   }
   return JURASSIC_FAIL;
 }

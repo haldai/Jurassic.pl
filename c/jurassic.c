@@ -1247,13 +1247,11 @@ int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
 #endif
     return PL_unify_string_chars(tmp_term, retval);
   } else if (jl_is_quotenode(val)) {
-#ifdef JURASSIC_DEBUG
-    printf("        QuoteNode of ");
-#endif
     jl_value_t *quotedval = jl_quotenode_value(val);
 #ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) quotedval);
-    printf(".\n");
+    printf("        QuoteNode of:\n");
+    jl_static_show(JL_STDOUT, quotedval);
+    printf("\n");
 #endif
     term_t qval = PL_new_term_ref();
     return jl_unify_pl(quotedval, &qval, 1)

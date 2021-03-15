@@ -11,8 +11,10 @@
                      jl_new_array/4,
                      ':='/1,
                      ':='/2,
+                     '$='/2,
                      op(950, fx, :=),
                      op(950, yfx, :=),
+                     op(950, yfx, $=),
                      op(900, yfx, '->>'),
                      op(700, yfx, (+=)),
                      op(700, yfx, (-=)),
@@ -51,6 +53,10 @@
     jl_eval_str(X, Y).
 ':='(Y, X) :-
     jl_eval(X, Y).
+/* Meta-programming: assign Julia variable Y with QuoteNode of X (without evaluation) */
+'$='(Y, X) :-
+    ground(Y), !,
+    := Y = $(X).
 
 /* array init */
 jl_new_array(Name, Type, Init, Size) :-

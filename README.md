@@ -272,57 +272,6 @@ Y = 2,
 Z = c.
 ```
 
-__Remark__: `QuoteNode` and `Symbol` are different in Julia. In `Jurassic.pl`,
-symbols (`:x`) will be parsed as `Symbol` only and will be called by
-`jl_symbol_lookup` to access its value. For `QuoteNode` usage, you should use
-`$x`. For example, in the `Tuple` example, to define a tuple contains symbol:
-
-``` prolog
-?- a := tuple([2.0, $'I\'m a quoted symbol']),
-     := @show(a).
-a = (2.0, Symbol("I''m a quoted symbol"))
-true.
-
-% wrong usage
-?- a := tuple([2.0, :'I\'m a quoted symbol']),
-     := @show(a).
-UndefVarError: I''m a quoted symbol not defined
-false.
-```
-
-However, meta-programming requires to use `Symbols` instead of `QuoteNodes`:
-
-``` prolog
-?- X = jl_expr(:'=', [:a, jl_expr(:call, [*, 2, 3])]), 
-   := eval(X),
-   := @show(a).
-a = :(2 * 3)
-X = jl_expr(: (=), [:a, jl_expr(:call, [*, 2, 3])]).
-
-% wrong usage
-:- X = jl_expr(:'=', [$a, jl_expr(:call, [*, 2, 3])]),
-   := eval(X), 
-   := @show(a).
-syntax: invalid assignment location ":a"
-false.
-```
-
-In order to make the code less ambiguous, please use `QuoteNode` symbol "`:`" if
-you do not want to access the value an atom (Julia variable):
-
-``` prolog
-?- a := array('Int64', undef, 2, 2).
-true.
-
-?- X = a, := @show(X).
-a = [0 0; 0 0]
-X = a.
-
-?- X = :a, := @show(X).
-:a = :a
-X = :a.
-```
-
 Currently, the unification only works for 1d-arrays:
 
 ``` prolog
@@ -344,6 +293,41 @@ true.
 typeof(f([1, 2, 3])) = Array{Int64,2}
 [ERR] Cannot unify list with matrices and tensors!
 false.
+```
+
+### `QuoteNode` and `Symbol`
+
+`QuoteNode` and `Symbol` are different in Julia. `QuoteNode` is an
+AST node that won't get evaluated (stored as `Expr`), while `Symbol` will be
+accessed when calling `jl_toplevel_eval` in Julia's main module.
+
+__Remark__: In `Jurassic.pl`, symbols (`:x`) will be parsed as `Symbol` only;
+for `QuoteNode` usage, you should use `$x` (or `$(x)`). When unifying Prolog
+term and Julia atom with "`:=/2`", `Symbol` will be evaluated; while unification
+with "`=/2`" won't evaluate symbols. For example, in the `Tuple` example, to
+define a tuple contains symbol:
+``` prolog
+?- a := tuple([2.0, $'I\'m a quoted symbol']),
+     := @show(a).
+a = (2.0, Symbol("I''m a quoted symbol"))
+true.
+
+% wrong usage
+?- a := tuple([2.0, :'I\'m a quoted symbol']),
+     := @show(a).
+UndefVarError: I''m a quoted symbol not defined
+false.
+
+?- a := array('Int64', undef, 2, 2).
+true.
+
+?- X = a, := @show(X).
+a = [0 0; 0 0]
+X = a.
+
+?- X = :a, := @show(X).
+:a = :a
+X = :a.
 ```
 
 ## Julia Constants and Keywords
@@ -398,7 +382,10 @@ a = -2
 true.
 ```
 
-**Remark**: Tuples are *always* evaluated before unification:
+__Remark__: Tuples are *always* evaluated before unification, lists are not.
+When unifying `X := tuple([$a])`, the `tuple/1` predicate will be evaluated to
+Julia `Tuple(:a)`, then `:=/2` will access the value of variable `:a` by
+default. To make sure of unifying `Symbol`, please use double `QuoteNode` operators `$($a)`:
 
 ``` prolog
 ?- a := 1.
@@ -410,8 +397,11 @@ X = [1, :a].
 ?- X := tuple([1+1, :a]).
 X = tuple([2, 1]).
 
-% TODO $a should be :a
 ?- X := tuple([1+1, $a]).
+X = tuple([2, 1]).
+
+% using $($a) to unify :a
+?- X := tuple([1+1, $($a)]).
 X = tuple([2, 1]).
 ```
 
@@ -471,24 +461,73 @@ X = [3.141592653589793, 6.283185307179586, 9.42477796076938, 12.566370614359172,
 Julia supports
 [meta-programming](https://docs.julialang.org/en/v1/manual/metaprogramming/),
 expressions `Expr(head, arg1, arg2, arg3)` are represented with  predicate
-`jl_expr/2`:
+`jl_expr/2`, in which the first argument is the predicate (root on the
+[AST](https://docs.julialang.org/en/v1/devdocs/ast/#Julia-ASTs)), the second
+argument contains all the arguments of the expression (leaves on the AST). For
+example, a Julia express `1+a` has AST:
+
+``` julia
+julia> dump(Meta.parse("1+a"))
+Expr
+  head: Symbol call
+  args: Array{Any}((3,))
+    1: Symbol +
+    2: Int64 1
+    3: Symbol a
+```
+
+In `Jurassic.pl`, it will be represented as `jl_expr(:call, +, 1, :a)` or
+`jl_expr(:call, :(+), 1, :a)`. However, because "`:=/2`" will automatically
+evaluate symbols in the expressions, directly assigning an atom with `Expr` will
+cause errors:
 
 ``` prolog
-% Expr(:call, +, 1, 1) form of "b = 1 + 1"
-?- X = jl_expr(:'=', [:b, jl_expr(:call, [+, 1, 1])]),
-   := eval(X),
-   := @show(b).
-b = :(1 + 1)
-X = jl_expr(: (=), [:b, jl_expr(:call, [+, 1, 1])]).
+e := jl_expr(:call, [+, 1, :a]).
+UndefVarError: a not defined
+false.
+```
 
-?- := c = eval(b), 
-   := @show(c).
-c = 2
+To assign a variable with value of Julia `Expr` via `:=/2`, please use the
+`QuoteNode` operator `$`:
+
+``` prolog
+:- e := $jl_expr(:call, [+, 1, :a]).
 true.
 
-?- a := jl_expr(:call, [*, :b, :b]), 
-   := @show(a).
-a = :(b * b)
+:- e := $jl_expr(:call, [:(+), 1, :a]).
+true.
+
+%% evaluate the expression e (will fail because a is not defined)
+?- := @show(eval(e)).
+UndefVarError: a not defined
+false.
+
+%% define a
+?- a := 2.
+true.
+
+%% evaluate the expression e (success)
+?- := @show(eval(e)).
+eval(e) = 3
+true.
+
+%% assign the evaluated results of e to new variable b
+?- b := eval(e),
+   := @show(b).
+b = 3
+true.
+```
+
+To simplify the expression construction, `Jurassic.pl` provides a predicate
+`Y $= X` for `Y := $(X)`. Moreover, `jl_expr/2` can construct nested AST
+expressions:
+
+``` prolog
+?- e $= jl_expr(:call, [:(/), jl_expr(:call, [:(*), :a, 2]), jl_expr(:call, [:(+), 2, :a])]).
+true.
+
+?- := @show(eval(e)).
+eval(e) = 1.0
 true.
 ```
 

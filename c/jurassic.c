@@ -581,7 +581,22 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
   } else if (fname[0] == ':' && arity < 2) {
     return (jl_expr_t *) pl2sym(expr);
   } else if (PL_is_functor(expr, FUNCTOR_quotenode1) && arity < 2) {
-    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr));
+    // fetch the argument
+    term_t arg_term = PL_new_term_ref();
+    if (!PL_get_arg(1, expr, arg_term)) {
+      printf("[ERR] Get field term argument of quotenode failed!\n");
+      return NULL;
+    }
+#ifdef JURASSIC_DEBUG
+    char *str_arg;
+    if (!PL_get_chars(arg_term, &str_arg,
+                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8)) {
+      printf(" [ERR] QuoteNode: Wrong argument!\n");
+      return NULL;
+    }
+    printf("        QuoteNode: %s.\n", str_arg);
+#endif
+    return (jl_expr_t *) jl_new_struct(jl_quotenode_type, compound_to_jl_expr(arg_term));
   } else if (PL_is_functor(expr, FUNCTOR_expr2) && arity == 2) {
     // make an expression (:call, :Expr, QuoteNode_pred, QuoteNode_args)
     jl_expr_t *ex;
@@ -600,38 +615,28 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     }
     size_t len = list_length(expr_args);
 #ifdef JURASSIC_DEBUG
-      printf("        Functor: Expression with %lu args.\n", len);
+    printf("        Functor: Expression with %lu args.\n", len);
 #endif
-    ex = jl_exprn(jl_symbol("call"), len + 2); // head Symbol(call)
-    JL_GC_PUSH1(&ex);
-
-    if (!jl_set_jl_arg(&ex, 0, (jl_value_t *) jl_symbol("Expr"))) { // arg0 Symbol("Expr")
+    // head Symbol
+    jl_sym_t *head = pl2sym(expr_pred);
+    JL_GC_PUSH1(&head);
+    if (!head) {
+      printf("[ERR] head of Expr is not a symbol!\n");
       JL_GC_POP();
       return NULL;
     }
     {
-      // arg1 QuoteNode(pred)
-      jl_value_t *expr_pred_qn = (jl_value_t *) jl_new_struct(jl_quotenode_type, pl2sym(expr_pred));
-      JL_GC_PUSH1(&expr_pred_qn);
-
-      if (!jl_set_jl_arg(&ex, 1, expr_pred_qn)) {
+      ex = jl_exprn(head, len);
+      JL_GC_PUSH1(&ex);
+      if (!list_to_expr_args(expr_args, &ex, 0, len, 0)) {
         JL_GC_POP();
         JL_GC_POP();
         return NULL;
       }
-
-      if (!list_to_expr_args(expr_args, &ex, 2, len, 1)) {
-        JL_GC_POP();
-        JL_GC_POP();
-        return NULL;
-      }
-#ifdef JURASSIC_DEBUG
-      jl_static_show(JL_STDOUT, (jl_value_t *)ex);
-      jl_printf(JL_STDOUT, "\n");
-#endif
       JL_GC_POP();
     }
     JL_GC_POP();
+    // return (jl_expr_t *) jl_new_struct(jl_quotenode_type, ex);
     return ex;
   } else if (PL_is_functor(expr, FUNCTOR_macro1) && arity == 1) {
     /* macro calls */
@@ -1082,7 +1087,7 @@ jl_sym_t * pl2sym(term_t term) {
     return NULL;
   }
   const char *fname = PL_atom_chars(functor);
-  if ((fname[0] == ':' || PL_is_functor(term, FUNCTOR_quotenode1)) && arity < 2) {
+  if (fname[0] == ':' && arity < 2) {
     char *sym_str;
     if (!PL_get_chars(term, &sym_str,
                       CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))

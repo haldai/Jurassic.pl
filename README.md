@@ -485,7 +485,7 @@ evaluate symbols in the expressions, directly assigning an atom with `Expr` will
 cause errors:
 
 ``` prolog
-e := jl_expr(:call, [+, 1, :a]).
+?- e := jl_expr(:call, [+, 1, :a]).
 UndefVarError: a not defined
 false.
 ```
@@ -494,10 +494,10 @@ To assign a variable with value of Julia `Expr` via `:=/2`, please use the
 `QuoteNode` operator `$`:
 
 ``` prolog
-:- e := $jl_expr(:call, [+, 1, :a]).
+?- e := $jl_expr(:call, [+, 1, :a]).
 true.
 
-:- e := $jl_expr(:call, [:(+), 1, :a]).
+?- e := $jl_expr(:call, [:(+), 1, :a]).
 true.
 
 %% evaluate the expression e (will fail because a is not defined)

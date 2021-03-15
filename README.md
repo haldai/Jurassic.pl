@@ -519,16 +519,28 @@ true.
 ```
 
 To simplify the expression construction, `Jurassic.pl` provides a predicate
-`Y $= X` for `Y := $(X)`. Moreover, `jl_expr/2` can construct nested AST
-expressions:
+`Y $= X` for `Y := $(X)`:
 
 ``` prolog
-?- e $= jl_expr(:call, [:(/), jl_expr(:call, [:(*), :a, 2]), jl_expr(:call, [:(+), 2, :a])]).
+?- e $= jl_expr(:call, [:(+), :a, 2]), 
+   := @show(e),
+   := 'Meta'.show_sexpr(e), 
+   := @show(eval(e)).
+e = :(a + 2) % @show(e)
+(:call, :+, :a, 2) % Meta.show_sexpr(e)
+eval(e) = 4 % @show(eval(e))
 true.
+```
 
-?- := @show(eval(e)).
-eval(e) = 1.0
-true.
+Moreover, `jl_expr/2` can be used for constructing nested AST expressions:
+
+``` prolog
+?- X1 = jl_expr(:call, [:(+), :a, 2]), 
+   X2 = jl_expr(:call, [:(*), X1, :a]),
+   := @show(eval(X1)).
+eval(a + 2) = 4
+X1 = jl_expr(:call, [: (+), :a, 2]),
+X2 = jl_expr(:call, [: (*), jl_expr(:call, [: (+), :a, 2]), :a]).
 ```
 
 ## TODO: Multi-dimension Arrays

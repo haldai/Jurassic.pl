@@ -578,18 +578,18 @@ assert it directly with `QuoteNode` assignment `$=/2`:
 true.
 
 %% construct directly with $=/2
-?- dxdt[1] $= :a + :b.
+?- dxdt[1] $= ((:a + :b)/2)^3.
 true.
 
 %% construct as a Prolog term
-?- dxdt[2] $= jl_expr(:call, [:(+), :a, :b]).
+?- X = jl_expr(:call, [:(^), jl_expr(:call, [:(/), jl_expr(:call, [:(+), :a, :b]), 2]), 3]),
+   dxdt[2] $= X.
 true.
 
 ?- := @show(dxdt).
-dxdt = Expr[:(a + b), :(a + b)]
+dxdt = Expr[:(((a + b) / 2) ^ 3), :(((a + b) / 2) ^ 3)]
 true.
 
-%% the two equations are equivalent
 ?- := dxdt[1] == dxdt[2].
 true.
 ```

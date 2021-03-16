@@ -568,6 +568,32 @@ X1 = jl_expr(:call, [: (+), :a, 2]),
 X2 = jl_expr(:call, [: (*), jl_expr(:call, [: (+), :a, 2]), :a]).
 ```
 
+### Construct expressions directly with `QuoteNode`
+
+If no Prolog inferences are required when constructing an expression, we could
+assert it directly with `QuoteNode` assignment `$=/2`:
+
+``` prolog
+?- dxdt := array('Expr', undef, 2).
+true.
+
+%% construct directly with $=/2
+?- dxdt[1] $= :a + :b.
+true.
+
+%% construct as a Prolog term
+?- dxdt[2] $= jl_expr(:call, [:(+), :a, :b]).
+true.
+
+?- := @show(dxdt).
+dxdt = Expr[:(a + b), :(a + b)]
+true.
+
+%% the two equations are equivalent
+?- := dxdt[1] == dxdt[2].
+true.
+```
+
 ### Unify Prolog terms with Julia `Expr`
 
 Prolog terms can also unify with Julia AST expressions:

@@ -55,12 +55,12 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
   args[1] = jl_toplevel_eval_in(m, x);
   args[2] = jl_toplevel_eval_in(m, f);
 #ifdef JURASSIC_DEBUG
-  jl_printf(JL_STDOUT, "        -- value: ");
-  jl_static_show(JL_STDOUT, args[1]);
-  jl_printf(JL_STDOUT, "\n");
-  jl_printf(JL_STDOUT, "        -- field: ");
-  jl_static_show(JL_STDOUT, args[2]);
-  jl_printf(JL_STDOUT, "\n");
+  jl_printf(jl_stdout_stream(), "        -- value: ");
+  jl_static_show(jl_stdout_stream(), args[1]);
+  jl_printf(jl_stdout_stream(), "\n");
+  jl_printf(jl_stdout_stream(), "        -- field: ");
+  jl_static_show(jl_stdout_stream(), args[2]);
+  jl_printf(jl_stdout_stream(), "\n");
 #endif
   if (jl_is_module(args[1])) {
     JL_TYPECHK(getfield, symbol, args[2]);
@@ -333,9 +333,9 @@ static int jl_tuple_ref_unify(term_t *pl_term, jl_value_t *val, size_t idx) {
   size_t n = jl_nfields(val);
   jl_value_t * v = jl_get_nth_field_checked(val, idx);
 #ifdef JURASSIC_DEBUG
-  jl_printf(JL_STDOUT, "[DEBUG] item: %lu/%lu\n", idx, n);
-  jl_static_show(JL_STDOUT, (jl_value_t *) v);
-  jl_printf(JL_STDOUT, "\n");
+  jl_printf(jl_stdout_stream(), "[DEBUG] item: %lu/%lu\n", idx, n);
+  jl_static_show(jl_stdout_stream(), (jl_value_t *) v);
+  jl_printf(jl_stdout_stream(), "\n");
 #endif
   if (PL_is_atom(*pl_term) && PL_is_ground(*pl_term)) {
     // assignment
@@ -375,9 +375,9 @@ static int jl_tuple_unify_all(term_t *pl_tuple, jl_value_t *val) {
     }
 #ifdef JURASSIC_DEBUG
     printf("        Unify tuple/%lu.\n", nargs);
-    jl_printf(JL_STDOUT, "[DEBUG] Tuple value:\n");
-    jl_static_show(JL_STDOUT, (jl_value_t *) val);
-    jl_printf(JL_STDOUT, "\n");
+    jl_printf(jl_stdout_stream(), "[DEBUG] Tuple value:\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) val);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     term_t head = PL_new_term_ref();
     term_t l = PL_copy_term_ref(list);
@@ -390,8 +390,36 @@ static int jl_tuple_unify_all(term_t *pl_tuple, jl_value_t *val) {
     return JURASSIC_FAIL;
 }
 
-static int jl_expr_unify_all(term_t *pl_head, term_t *pl_args, jl_value_t *val) {
+/* Julia linenumbernode with none in it */
+static jl_value_t *jl_linenumbernode_none(size_t n) {
+  return jl_new_struct(jl_linenumbernode_type, jl_box_long(n), jl_nothing);
+}
 
+/* Compile expression list into an array of Expr separated by LineNumberNode */
+static int expr_list_to_func_lines(term_t list, jl_expr_t **ret) {
+  jl_exprargset(*ret, 0, jl_linenumbernode_none(0)); // first line
+
+  term_t head = PL_new_term_ref();
+  term_t term = PL_copy_term_ref(list);
+
+  size_t i = 1;
+  size_t j = 1;
+  // set arguments
+  while (PL_get_list(term, head, term)) {
+    jl_exprargset(*ret, i, jl_linenumbernode_none(j)); // linenumber node n
+    jl_exprargset(*ret, i+1, (jl_value_t *) compound_to_jl_expr(head)); // code
+    i+=2;
+    j++;
+  }
+  if (jl_exception_occurred()) {
+    // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
+    jl_call2(jl_get_function(jl_base_module, "showerror"),
+             jl_stderr_obj(),
+             jl_exception_occurred());
+    jl_printf(jl_stderr_stream(), "\n");
+    return JURASSIC_FAIL;
+  }
+  return JURASSIC_SUCCESS;
 }
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -422,44 +450,44 @@ int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
     } else if (atom == ATOM_nothing) {
 #ifdef JURASSIC_DEBUG
       printf("Nothing.\n");
-      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       *ret = jl_nothing;
     } else if (atom == ATOM_missing) {
 #ifdef JURASSIC_DEBUG
       printf("Missing.\n");
-      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       *ret = jl_eval_string("missing");
     }  else if (atom == ATOM_nan) {
 #ifdef JURASSIC_DEBUG
       printf("NaN.\n");
-      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       *ret = jl_box_float64(D_PNAN);
     } else if (atom == ATOM_inf) {
 #ifdef JURASSIC_DEBUG
       printf("Inf.\n");
-      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       *ret = jl_box_float64(D_PINF);
     } else if (atom == ATOM_ninf) {
 #ifdef JURASSIC_DEBUG
       printf("negative Inf.\n");
-      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       *ret = jl_box_float64(D_NINF);
     } else if (jl_is_defined(a) && !flag_sym) {
       /* get the variable assignment according to name */
 #ifdef JURASSIC_DEBUG
       printf("defined Julia variable.\n");
-      jl_static_show(JL_STDOUT, jl_get_global(jl_main_module, jl_symbol_lookup(a)));
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), jl_get_global(jl_main_module, jl_symbol_lookup(a)));
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       return jl_access_var(a, ret);
     } else if (strchr(a, '.') != NULL){
@@ -508,8 +536,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     if (!list_to_expr_args(expr, &ex, 0, len, 0))
       return NULL;
 #ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-    jl_printf(JL_STDOUT, "\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     return ex;
   } else if (!PL_is_compound(expr)) {
@@ -532,7 +560,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
     printf("        Field of variable:\n");
 #endif
-    // TODO field symbol should be quotenode!!
+    // field symbol should be quotenode!!
     jl_expr_t *ex = jl_exprn((jl_sym_t *) jl_symbol("."), arity);
     JL_GC_PUSH1(&ex);
     /* assign the two arguments */
@@ -556,8 +584,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     jl_exprargset(ex, 0, compound_to_jl_expr(arg1_term));
     jl_exprargset(ex, 1, (jl_expr_t *) jl_new_struct(jl_quotenode_type, compound_to_jl_expr(arg2_term)));
 #ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-    jl_printf(JL_STDOUT, "\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     JL_GC_POP();
     return ex;
@@ -686,14 +714,14 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     if (!func)
       return NULL;
     jl_exprargset(ex, 0, func);
-    jl_exprargset(ex, 1, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing));
+    jl_exprargset(ex, 1, jl_linenumbernode_none(0));
     if (!jl_set_args(&ex, macro_call, arity, 2, 1)) {
       JL_GC_POP();
       return NULL;
     }
 #ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-    jl_printf(JL_STDOUT, "\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     JL_GC_POP();
     return ex;
@@ -704,7 +732,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     term_t list = PL_new_term_ref();
     if (arity == 1) {
 #ifdef JURASSIC_DEBUG
-      jl_printf(JL_STDOUT, "Array initialisation.");
+      jl_printf(jl_stdout_stream(), "Array initialisation.");
 #endif
       if (!PL_get_arg(1, expr, collection)) {
         printf("[ERR] Cannot access reference arguments!\n");
@@ -713,8 +741,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
         jl_expr_t *ex = jl_exprn(jl_symbol("ref"), 1);
         jl_exprargset(ex, 0, compound_to_jl_expr(collection));
 #ifdef JURASSIC_DEBUG
-        jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-        jl_printf(JL_STDOUT, "\n");
+        jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+        jl_printf(jl_stdout_stream(), "\n");
 #endif
         return ex;
       }
@@ -739,8 +767,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
         return NULL;
       }
 #ifdef JURASSIC_DEBUG
-      jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-      jl_printf(JL_STDOUT, "\n");
+      jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       JL_GC_POP();
       return ex;
@@ -763,8 +791,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       return NULL;
     }
 #ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-    jl_printf(JL_STDOUT, "\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     JL_GC_POP();
     return ex;
@@ -794,7 +822,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
         JL_GC_POP(); // POP ex
         return NULL;
       } else {
-        jl_set_jl_arg(&ex2, 0, jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing)); // linenumbernode
+        jl_set_jl_arg(&ex2, 0, jl_linenumbernode_none(0)); // linenumbernode
         if (!jl_set_arg(&ex2, 1, arg) || !jl_set_jl_arg(&ex, 1, (jl_value_t *) ex2)) {
           JL_GC_POP(); // POP ex2
           JL_GC_POP(); // POP ex
@@ -804,8 +832,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       }
     }
 #ifdef JURASSIC_DEBUG
-    jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-    jl_printf(JL_STDOUT, "\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     JL_GC_POP(); // POP ex
     return ex;
@@ -854,8 +882,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
           return NULL;
         }
 #ifdef JURASSIC_DEBUG
-        jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-        jl_printf(JL_STDOUT, "\n");
+        jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+        jl_printf(jl_stdout_stream(), "\n");
 #endif
         JL_GC_POP();
         return ex;
@@ -880,8 +908,8 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
           return NULL;
         }
 #ifdef JURASSIC_DEBUG
-        jl_static_show(JL_STDOUT, (jl_value_t *) ex);
-        jl_printf(JL_STDOUT, "\n");
+        jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+        jl_printf(jl_stdout_stream(), "\n");
 #endif
         JL_GC_POP();
         return ex;
@@ -889,6 +917,58 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     }
   }
   return NULL;
+}
+
+/* declare a julia function */
+jl_expr_t *jl_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
+#ifdef JURASSIC_DEBUG
+  printf("[DEBUG] Constructing function:\n");
+#endif
+  /* First argument: function declaration (:call, fname, fargs...) */
+
+  // parse fname_pl into Julia Symbol
+  jl_value_t *fname;
+  if (!pl2jl(fname_pl, &fname, TRUE) || fname == NULL || !jl_is_symbol(fname)) {
+    return NULL;
+  }
+  int arg_len = list_length(fargs_pl);
+  if (arg_len < 0) {
+    printf("[ERR] Argument is not a list!\n");
+    return NULL;
+  }
+
+  jl_expr_t *fdec = jl_exprn(jl_symbol("call"), arg_len+1);
+
+  JL_GC_PUSH1(&fname); // push fname
+  jl_exprargset(fdec, 0, fname); // first argument is the function name
+  if (!list_to_expr_args(fargs_pl, &fdec, 1, arg_len, 0)) {
+    printf("[ERR] Read argument list failed!\n");
+    JL_GC_POP(); // pop fname
+    return NULL;
+  }
+#ifdef JURASSIC_DEBUG
+  jl_static_show(jl_stdout_stream(), (jl_value_t *) fdec);
+  jl_printf(jl_stdout_stream(), "\n");
+#endif
+  /* Second argument: expressions with line number nodes */
+  // make the second argument for Julia operator function/2
+  int num_lines = list_length(fexprs_pl);
+  jl_expr_t *fcodes = jl_exprn(jl_symbol("block"), num_lines*2+1);
+  if (!expr_list_to_func_lines(fexprs_pl, &fcodes)) {
+    JL_GC_POP(); // pop fname
+    return NULL;
+  }
+#ifdef JURASSIC_DEBUG
+  jl_static_show(jl_stdout_stream(), (jl_value_t *) fcodes);
+  jl_printf(jl_stdout_stream(), "\n");
+#endif
+
+  /* Construct the expression for function */
+  jl_expr_t *f_expr = jl_exprn(jl_symbol("function"), 2);
+  jl_set_jl_arg(&f_expr, 0, (jl_value_t *) fdec);
+  jl_set_jl_arg(&f_expr, 1, (jl_value_t *) fcodes);
+  JL_GC_POP(); // pop fname
+  return f_expr;
 }
 
 int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size_t start_pl) {
@@ -914,7 +994,7 @@ int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size
   return JURASSIC_SUCCESS;
 }
 
-int list_to_jl(term_t list, int length, jl_array_t **ret, int flag_sym) {
+int list_to_jl(term_t list, jl_array_t **ret, int flag_sym) {
   jl_value_t **arr_vals = (jl_value_t **) jl_array_data(*ret);
 
   term_t head = PL_new_term_ref();
@@ -1041,7 +1121,7 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
 #endif
     jl_array_t *arr = jl_alloc_array_1d(jl_apply_array_type((jl_value_t*)jl_any_type, 1), len);
 
-    if (!list_to_jl(term, len, &arr, flag_sym)) {
+    if (!list_to_jl(term, &arr, flag_sym)) {
       *ret = NULL;
       return JURASSIC_FAIL;
     } else
@@ -1057,9 +1137,9 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
       }
       JL_GC_PUSH1(&expr);
 #ifdef JURASSIC_DEBUG
-      jl_printf(JL_STDOUT, "[DEBUG] Parsed expression:\n");
-      jl_static_show(JL_STDOUT, (jl_value_t *)expr);
-      jl_printf(JL_STDOUT, "\n");
+      jl_printf(jl_stdout_stream(), "[DEBUG] Parsed expression:\n");
+      jl_static_show(jl_stdout_stream(), (jl_value_t *)expr);
+      jl_printf(jl_stdout_stream(), "\n");
 #endif
       if (jl_is_quotenode(expr))
         *ret = (jl_value_t *) expr;
@@ -1136,8 +1216,8 @@ jl_sym_t * pl2sym(term_t term) {
 int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
 #ifdef JURASSIC_DEBUG
   printf("[Debug] Julia value:\n");
-  jl_static_show(JL_STDOUT, val);
-  jl_printf(JL_STDOUT, "\n");
+  jl_static_show(jl_stdout_stream(), val);
+  jl_printf(jl_stdout_stream(), "\n");
 #endif
   term_t tmp_term = PL_copy_term_ref(*ret);
   if (jl_is_nothing(val)) {
@@ -1250,7 +1330,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
     jl_value_t *quotedval = jl_quotenode_value(val);
 #ifdef JURASSIC_DEBUG
     printf("        QuoteNode of:\n");
-    jl_static_show(JL_STDOUT, quotedval);
+    jl_static_show(jl_stdout_stream(), quotedval);
     printf("\n");
 #endif
     term_t qval = PL_new_term_ref();
@@ -1378,6 +1458,7 @@ install_t install_jurassic(void) {
   PL_register_foreign("jl_isdefined", 1, jl_isdefined, 0);
   PL_register_foreign("jl_using", 1, jl_using, 0);
   PL_register_foreign("jl_include", 1, jl_include, 0);
+  PL_register_foreign("jl_declare_function", 3, jl_declare_function, 0);
   PL_register_foreign("jl_embed_halt", 0, jl_embed_halt, 0);
 
   printf("Initialise Embedded Julia ...");
@@ -1404,8 +1485,8 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
     JL_GC_PUSH1(&ret);
 #ifdef JURASSIC_DEBUG
     printf("[DEBUG] Evaluated result:\n");
-    jl_static_show(JL_STDOUT, ret);
-    jl_printf(JL_STDOUT, "\n");
+    jl_static_show(jl_stdout_stream(), ret);
+    jl_printf(jl_stdout_stream(), "\n");
 #endif
     if (!jl_unify_pl(ret, &pl_ret, 0)) {
       JL_GC_POP();
@@ -1496,8 +1577,8 @@ foreign_t jl_send_command(term_t jl_expr) {
     PL_fail;
   }
 #ifdef JURASSIC_DEBUG
-  jl_static_show(JL_STDOUT, ret);
-  jl_printf(JL_STDOUT, "\n");
+  jl_static_show(jl_stdout_stream(), ret);
+  jl_printf(jl_stdout_stream(), "\n");
 #endif
   JL_GC_PUSH1(&ret);
   if (jl_is_bool(ret)) {
@@ -1546,6 +1627,32 @@ foreign_t jl_include(term_t term) {
     PL_fail;
   JL_TRY {
     jl_load(jl_main_module, file);
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
+    PL_fail;
+  }
+  PL_succeed;
+}
+
+/* declare a julia function */
+foreign_t jl_declare_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
+  jl_expr_t *func = jl_function(fname_pl, fargs_pl, fexprs_pl);
+  JL_TRY {
+    if (!func)
+      PL_fail;
+    JL_GC_PUSH1(&func);
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Function expression:\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) func);
+    jl_printf(jl_stdout_stream(), "\n");
+#endif
+    if (!jl_toplevel_eval_in(jl_main_module, (jl_value_t *) func)) {
+      JL_GC_POP();
+      PL_fail;
+    }
+    JL_GC_POP();
     jl_exception_clear();
   } JL_CATCH {
     jl_get_ptls_states()->previous_exception = jl_current_exception();

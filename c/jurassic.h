@@ -17,7 +17,7 @@
 int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym);
 /* Convert Prolog lists to Julia arrays.
    TODO: multi-dimension arrays */
-int list_to_jl(term_t list, int length, jl_array_t **ret, int flag_sym);
+int list_to_jl(term_t list, jl_array_t **ret, int flag_sym);
 /* Convert prolog compounds to Julia expressions.
    FIXME: GC issues? */
 jl_expr_t * compound_to_jl_expr(term_t expr);
@@ -44,6 +44,7 @@ foreign_t jl_send_command(term_t jl_expr);
 foreign_t jl_isdefined(term_t jl_expr);
 foreign_t jl_using(term_t term);
 foreign_t jl_include(term_t term);
+foreign_t jl_declare_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl);
 foreign_t jl_embed_halt(void);
 
 #endif /* _JURASSIC_H */

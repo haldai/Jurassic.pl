@@ -9,6 +9,7 @@
                      jl_tuple_unify/2,
                      jl_isdefined/1,
                      jl_new_array/4,
+                     jl_declare_function/3,
                      ':='/1,
                      ':='/2,
                      '$='/2,

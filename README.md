@@ -619,6 +619,73 @@ jl_expr(:call,[: (*),jl_expr(:call,[: (+),:a,2]),:a])
 X = jl_expr(:call, [: (*), jl_expr(:call, [: (+), :a, 2]), :a]).
 ```
 
+### Create Julia function from Prolog
+
+The expressions defined by `jl_expr/2` can be used for constructing Julia
+functions by `jl_declare_function/3`, whose basic usage is:
+
+``` prolog
+jl_declare_function(Function_Name, Function_Arguments, Function_Codes).
+```
+
+The arguments are:
+- `Function_Name` is a Julia `Symbol`, it is represented by an Prolog atom, 
+  e.g., `myfunc` or `:myfunc`.
+- `Function_Arguments` is an array of Julia `Symbol`, it is represented by an
+  Prolog list of atoms, e.g., `[x, y]` or `[:x, :y]`. Note that Julia does __NOT__
+  take quoted symbols (`QuoteNode`) as valid function name and arguments, so
+  `$myfunc` and `[$x,$y]` __won't__ work.
+- `Function_Codes` is a Julia code block (`(:block, expr1, expr2, ...)`), which
+  is represented by a list of `jl_expr/2` in Prolog.
+
+Following is an example from
+[DifferentialEquations.jl](https://diffeq.sciml.ai/stable/tutorials/ode_example/),
+in which a 3-D [Lorenz system](https://en.wikipedia.org/wiki/Lorenz_system) is
+declared and solved numerically.
+
+The Julia code of the parameterized Lorenz function looks like this:
+
+``` julia
+function parameterized_lorenz!(du,u,p,t)
+    du[1] = p[1]*(u[2]-u[1])
+    du[2] = u[1]*(p[2]-u[3]) - u[2]
+    du[3] = u[1]*u[2] - p[3]*u[3]
+end
+```
+
+Assuming that we have already constructed the differential equations by Prolog
+inference and stored them in a list `[E1, E2, E3]`, we can declare the function
+by `jl_declare_function('parameterized_lorenz!', [:du, :u, :p, :t], [E1, E2,
+E3])`. Following is a full example:
+
+``` prolog
+solve_lorenz :-
+    % import useful libraries
+    jl_using('DifferentialEquations'),
+    jl_using('Plots'),
+    
+    % construct julia equations by Prolog 
+    E1 = jl_expr(: (=),[jl_expr(:ref,[:du,1]),jl_expr(:call,[: (*),jl_expr(:ref,[:p,1]),jl_expr(:call,[: (-),jl_expr(:ref,[:u,2]),jl_expr(:ref,[:u,1])])])]),
+    E2 = jl_expr(: (=),[jl_expr(:ref,[:du,2]),jl_expr(:call,[: (-),jl_expr(:call,[: (*),jl_expr(:ref,[:u,1]),jl_expr(:call,[: (-),jl_expr(:ref,[:p,2]),jl_expr(:ref,[:u,3])])]),jl_expr(:ref,[:u,2])])]),
+    E3 = jl_expr(: (=),[jl_expr(:ref,[:du,3]),jl_expr(:call,[: (-),jl_expr(:call,[: (*),jl_expr(:ref,[:u,1]),jl_expr(:ref,[:u,2])]),jl_expr(:call,[: (*),jl_expr(:ref,[:p,3]),jl_expr(:ref,[:u,3])])])]),
+    
+    % declare Julia function
+    jl_declare_function('parameterized_lorenz!', [:du, :u, :p, :t], [E1, E2, E3]),
+    
+    % set parameters
+    u0 := [1.0,0.0,0.0],
+    tspan := tuple([0.0,100.0]),
+    p := [10.0,28.0,8/3],
+    prob := 'ODEProblem'('parameterized_lorenz!',u0,tspan,p),
+    
+    % solve the problem and plot the result
+    sol := solve(prob),
+    := plot(sol, kw(vars,tuple([1,2,3])), kw(show,true)).
+```
+
+It will generate a nice figure like this:
+![image](https://diffeq.sciml.ai/stable/assets/3d_lorenz.png)
+
 ## TODO: Multi-dimension Arrays
 Array can be initialised with function `array`, which is equal to `Array{Type,
 Dim}(Init, Size)` in Julia:

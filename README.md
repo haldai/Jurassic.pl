@@ -702,7 +702,7 @@ solve_lorenz_alt :-
     e[3] $= du[3] = u[1]*u[2] - p[3]*u[3],
     
     % declare Julia function
-    jl_declare_function(:parameterized_lorenz, [:du, :u, :p, :t], e),
+    jl_declare_function('parameterized_lorenz!', [:du, :u, :p, :t], e),
     ...
 ```
 

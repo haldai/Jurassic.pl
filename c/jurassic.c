@@ -542,7 +542,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     return ex;
   } else if (!PL_is_compound(expr)) {
     jl_value_t *ret;
-    if (!pl2jl(expr, &ret, TRUE))
+    if (!pl_to_jl(expr, &ret, TRUE))
       return NULL;
     else
       return (jl_expr_t *) ret;
@@ -620,7 +620,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
       // QuoteNode?
       return (jl_expr_t *) jl_new_struct(jl_quotenode_type, compound_to_jl_expr(expr_arg));
     } else if (PL_is_atom(expr_arg))
-      return (jl_expr_t *) pl2sym(expr);
+      return (jl_expr_t *) compound_to_sym(expr);
   } else if (PL_is_functor(expr, FUNCTOR_quotenode1) && arity < 2) {
     // fetch the argument
     term_t arg_term = PL_new_term_ref();
@@ -659,7 +659,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     printf("        Functor: Expression with %lu args.\n", len);
 #endif
     // head Symbol
-    jl_sym_t *head = pl2sym(expr_pred);
+    jl_sym_t *head = compound_to_sym(expr_pred);
     JL_GC_PUSH1(&head);
     if (!head) {
       printf("[ERR] head of Expr is not a symbol!\n");
@@ -927,10 +927,19 @@ jl_expr_t *jl_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
   /* First argument: function declaration (:call, fname, fargs...) */
 
   // parse fname_pl into Julia Symbol
-  jl_value_t *fname;
-  if (!pl2jl(fname_pl, &fname, TRUE) || fname == NULL || !jl_is_symbol(fname)) {
+  jl_sym_t *fname = PL_is_compound(fname_pl) ?
+    compound_to_sym(fname_pl) : atomic_to_sym(fname_pl);
+  if (!fname) {
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Function name:\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) fname);
+    jl_printf(jl_stdout_stream(), "\n");
+#endif
+    printf("[ERR] Function name type error (1)!\n");
     return NULL;
   }
+
+  // parse the list of arguments
   int arg_len = list_length(fargs_pl);
   if (arg_len < 0) {
     printf("[ERR] Argument is not a list!\n");
@@ -1002,7 +1011,7 @@ int list_to_jl(term_t list, jl_array_t **ret, int flag_sym) {
 
   size_t i = 0;
   while (PL_get_list(term, head, term)) {
-    if (!pl2jl(head, &arr_vals[i], flag_sym)) {
+    if (!pl_to_jl(head, &arr_vals[i], flag_sym)) {
       *ret = NULL;
       return JURASSIC_FAIL;
     }
@@ -1020,7 +1029,7 @@ int list_to_jl(term_t list, jl_array_t **ret, int flag_sym) {
   return JURASSIC_SUCCESS;
 }
 
-int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
+int pl_to_jl(term_t term, jl_value_t **ret, int flag_sym) {
 #ifdef JURASSIC_DEBUG
   char *show;
   /* string, to string*/
@@ -1169,8 +1178,36 @@ int pl2jl(term_t term, jl_value_t **ret, int flag_sym) {
   return JURASSIC_SUCCESS;
 }
 
-/* convert Prolog term to Julia symbol */
-jl_sym_t * pl2sym(term_t term) {
+/* convert atomic term to symbol */
+jl_sym_t *atomic_to_sym(term_t atomic) {
+  atom_t atom;
+  if (!PL_get_atom(atomic, &atom)) {
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Term is not atomic!\n");
+#endif
+    return NULL;
+  }
+
+  const char *a = PL_atom_chars(atom);
+  if (a == NULL) {
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Reading string from atom failed!\n");
+#endif
+    return NULL;
+  } JL_TRY {
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Convert to symbol %s.\n", a);
+#endif
+    jl_exception_clear();
+    return jl_symbol(a);
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    return NULL;
+  }
+}
+
+/* convert quoted term to Julia symbol */
+jl_sym_t * compound_to_sym(term_t term) {
   atom_t functor;
   size_t arity;
   if (!PL_get_compound_name_arity_sz(term, &functor, &arity)) {
@@ -1480,7 +1517,7 @@ install_t install_jurassic(void) {
 foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
   jl_value_t *ret;
   JL_TRY {
-    if (!pl2jl(jl_expr, &ret, TRUE))
+    if (!pl_to_jl(jl_expr, &ret, TRUE))
       PL_fail;
     JL_GC_PUSH1(&ret);
 #ifdef JURASSIC_DEBUG
@@ -1524,7 +1561,7 @@ foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
 /* unify prolog tuple([A|B]) with julia functions that returns a tuple */
 foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr) {
   jl_value_t *val;
-  if (!pl2jl(jl_expr, &val, TRUE))
+  if (!pl_to_jl(jl_expr, &val, TRUE))
     PL_fail;
   JL_GC_PUSH1(&val);
   if (!jl_tuple_unify_all(&pl_tuple, val)) {
@@ -1567,7 +1604,7 @@ foreign_t jl_send_command_str(term_t jl_expr) {
 
 foreign_t jl_send_command(term_t jl_expr) {
   jl_value_t *ret;
-  if (!pl2jl(jl_expr, &ret, TRUE) || ret == NULL) {
+  if (!pl_to_jl(jl_expr, &ret, TRUE) || ret == NULL) {
     if (jl_exception_occurred()) {
       jl_call2(jl_get_function(jl_base_module, "showerror"),
                jl_stderr_obj(),

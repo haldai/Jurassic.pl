@@ -22,8 +22,11 @@ int list_to_jl(term_t list, jl_array_t **ret, int flag_sym);
    FIXME: GC issues? */
 jl_expr_t * compound_to_jl_expr(term_t expr);
 /* High-level function to convert Prolog term to Julia value */
-int pl2jl(term_t term, jl_value_t **ret, int flag_sym);
-jl_sym_t * pl2sym(term_t term);
+int pl_to_jl(term_t term, jl_value_t **ret, int flag_sym);
+/* Convert a quoted compound to a symbol */
+jl_sym_t * compound_to_sym(term_t term);
+/* Convert an atom to a symbol */
+jl_sym_t * atomic_to_sym(term_t term);
 /* Convert (unify Julia value with Prolog term) */
 int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym);
 /* Set Julia expression "*ex"'s arguments with Prolog term "expr"'s arguments,

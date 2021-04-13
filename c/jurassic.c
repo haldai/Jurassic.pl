@@ -457,7 +457,7 @@ static int expr_array_to_func_lines(jl_array_t *array, int len, jl_expr_t **ret)
   jl_exprargset(*ret, 0, jl_linenumbernode_none(0)); // first line
   size_t i = 1;
   size_t j = 1;
-  while (j < len) {
+  while (j <= len) {
     jl_exprargset(*ret, i, jl_linenumbernode_none(j)); // linenumber node n
     jl_exprargset(*ret, i+1, (jl_value_t *) jl_arrayref(array, j-1)); // code
     i+=2;

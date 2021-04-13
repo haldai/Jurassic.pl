@@ -197,11 +197,26 @@ static int jl_access_var(const char *var, jl_value_t **ret) {
       *ret = NULL;
       return JURASSIC_FAIL;
     }
-  }
-  else
+  } else
     return JURASSIC_FAIL;
   return JURASSIC_SUCCESS;
 }
+
+/* Get julia variable from string */
+static jl_value_t *jl_get_var(const char *var) {
+  if (jl_is_defined(var)) {
+    JL_TRY {
+      return jl_get_global(jl_main_module, jl_symbol_lookup(var));
+      jl_exception_clear();
+    } JL_CATCH {
+      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_throw_exception();
+      return NULL;
+    }
+  } else
+    return NULL;
+}
+
 
 /* Variable assignment */
 static int jl_assign_var(const char *var, jl_value_t *val) {
@@ -407,7 +422,44 @@ static int expr_list_to_func_lines(term_t list, jl_expr_t **ret) {
   // set arguments
   while (PL_get_list(term, head, term)) {
     jl_exprargset(*ret, i, jl_linenumbernode_none(j)); // linenumber node n
-    jl_exprargset(*ret, i+1, (jl_value_t *) compound_to_jl_expr(head)); // code
+    jl_expr_t *arg_expr = compound_to_jl_expr(head);
+#ifdef JURASSIC_DEBUG
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) arg_expr);
+    jl_printf(jl_stdout_stream(), "\t");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) jl_typeof(arg_expr));
+    jl_printf(jl_stdout_stream(), "\n");
+#endif
+    if (PL_is_atomic(head)) {
+      atom_t atom;
+      if (!PL_get_atom(head, &atom))
+        return JURASSIC_FAIL;
+      const char *a = PL_atom_chars(atom);
+      if (jl_is_defined(a)) {
+        jl_exprargset(*ret, i+1, jl_get_var(a)); // code
+      }
+    } else
+      jl_exprargset(*ret, i+1, (jl_value_t *) compound_to_jl_expr(head)); // code
+    i+=2;
+    j++;
+  }
+  if (jl_exception_occurred()) {
+    // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
+    jl_call2(jl_get_function(jl_base_module, "showerror"),
+             jl_stderr_obj(),
+             jl_exception_occurred());
+    jl_printf(jl_stderr_stream(), "\n");
+    return JURASSIC_FAIL;
+  }
+  return JURASSIC_SUCCESS;
+}
+
+static int expr_array_to_func_lines(jl_array_t *array, int len, jl_expr_t **ret) {
+  jl_exprargset(*ret, 0, jl_linenumbernode_none(0)); // first line
+  size_t i = 1;
+  size_t j = 1;
+  while (j < len) {
+    jl_exprargset(*ret, i, jl_linenumbernode_none(j)); // linenumber node n
+    jl_exprargset(*ret, i+1, (jl_value_t *) jl_arrayref(array, j-1)); // code
     i+=2;
     j++;
   }
@@ -960,13 +1012,41 @@ jl_expr_t *jl_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
   jl_printf(jl_stdout_stream(), "\n");
 #endif
   /* Second argument: expressions with line number nodes */
-  // make the second argument for Julia operator function/2
-  int num_lines = list_length(fexprs_pl);
-  jl_expr_t *fcodes = jl_exprn(jl_symbol("block"), num_lines*2+1);
-  if (!expr_list_to_func_lines(fexprs_pl, &fcodes)) {
-    JL_GC_POP(); // pop fname
-    return NULL;
+  // if it is an atom (Julia variable of Array{Expr})
+  int num_lines = 0;
+  jl_expr_t *fcodes;
+  int is_julia_var = 0;
+  if (PL_is_atomic(fexprs_pl)) {
+    jl_value_t *array_expr;
+    if (!pl_to_jl(fexprs_pl, &array_expr, FALSE)) {
+      printf("[ERR] Function lines error, cannot access the variable!\n");
+      return NULL;
+    } else {
+      if (!jl_is_array(array_expr) || !jl_is_expr(jl_arrayref((jl_array_t *) array_expr, 0))) {
+        printf("[ERR] Function lines error, variable is not an array of Expr!\n");
+        return NULL;
+      } else {
+        is_julia_var = 1;
+        JL_GC_PUSH1(&array_expr); // push array_expr
+        num_lines = jl_array_len(array_expr);
+        fcodes = jl_exprn(jl_symbol("block"), num_lines*2+1);
+        if (!expr_array_to_func_lines((jl_array_t *) array_expr, num_lines, &fcodes)) {
+          JL_GC_POP(); // pop fname
+          return NULL;
+        }
+      }
+    }
+  } else if (PL_is_list(fexprs_pl)) {
+    // if it is a list term
+    // make the second argument for Julia operator function/2
+    num_lines = list_length(fexprs_pl);
+    fcodes = jl_exprn(jl_symbol("block"), num_lines*2+1);
+    if (!expr_list_to_func_lines(fexprs_pl, &fcodes)) {
+      JL_GC_POP(); // pop fname
+      return NULL;
+    }
   }
+
 #ifdef JURASSIC_DEBUG
   jl_static_show(jl_stdout_stream(), (jl_value_t *) fcodes);
   jl_printf(jl_stdout_stream(), "\n");
@@ -976,6 +1056,9 @@ jl_expr_t *jl_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
   jl_expr_t *f_expr = jl_exprn(jl_symbol("function"), 2);
   jl_set_jl_arg(&f_expr, 0, (jl_value_t *) fdec);
   jl_set_jl_arg(&f_expr, 1, (jl_value_t *) fcodes);
+  if (is_julia_var) {
+    JL_GC_POP(); // pop array_expr
+  }
   JL_GC_POP(); // pop fname
   return f_expr;
 }

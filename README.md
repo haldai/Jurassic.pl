@@ -686,6 +686,24 @@ solve_lorenz :-
 It will generate a nice figure like this:
 ![image](https://diffeq.sciml.ai/stable/assets/3d_lorenz.png)
 
+Alternatively, the `Function_Codes` argument can be an atom referring to a Julia
+array of `Expr`s:
+
+``` prolog
+solve_lorenz_alt :-
+    % import useful libraries
+    jl_using('DifferentialEquations'),
+    jl_using('Plots'),
+    
+    % define equations with Julia
+    e := array('Any', undef, 3),
+    e[1] $= du[1] = p[1]*(u[2]-u[1]),
+    e[2] $= du[2] = u[1]*(p[2]-u[3]) - u[2],
+    e[3] $= du[3] = u[1]*u[2] - p[3]*u[3],
+    
+    ....
+```
+
 ## TODO: Multi-dimension Arrays
 Array can be initialised with function `array`, which is equal to `Array{Type,
 Dim}(Init, Size)` in Julia:

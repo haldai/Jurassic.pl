@@ -10,6 +10,7 @@
                      jl_isdefined/1,
                      jl_new_array/4,
                      jl_declare_function/3,
+                     jl_declare_macro_function/4,                     
                      ':='/1,
                      ':='/2,
                      '$='/2,

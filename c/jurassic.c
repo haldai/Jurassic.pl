@@ -749,7 +749,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     const char *macro_name_ = PL_atom_chars(macro);
     char *macro_name = (char *) calloc(1 + strlen(macro_name_) + 1, sizeof(char));
     strcpy(macro_name, "@");
-      strcat(macro_name, macro_name_);
+    strcat(macro_name, macro_name_);
 #ifdef JURASSIC_DEBUG
     printf("        Macro: %s/%lu.\n", macro_name, macro_arity);
 #endif
@@ -1579,6 +1579,7 @@ install_t install_jurassic(void) {
   PL_register_foreign("jl_using", 1, jl_using, 0);
   PL_register_foreign("jl_include", 1, jl_include, 0);
   PL_register_foreign("jl_declare_function", 3, jl_declare_function, 0);
+  PL_register_foreign("jl_declare_macro_function", 4, jl_declare_function, 0);
   PL_register_foreign("jl_embed_halt", 0, jl_embed_halt, 0);
 
   printf("Initialise Embedded Julia ...");
@@ -1758,8 +1759,8 @@ foreign_t jl_include(term_t term) {
 
 /* declare a julia function */
 foreign_t jl_declare_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
-  jl_expr_t *func = jl_function(fname_pl, fargs_pl, fexprs_pl);
   JL_TRY {
+    jl_expr_t *func = jl_function(fname_pl, fargs_pl, fexprs_pl);
     if (!func)
       PL_fail;
     JL_GC_PUSH1(&func);
@@ -1777,6 +1778,64 @@ foreign_t jl_declare_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl
   } JL_CATCH {
     jl_get_ptls_states()->previous_exception = jl_current_exception();
     jl_throw_exception();
+    PL_fail;
+  }
+  PL_succeed;
+}
+
+/* declare a julia macro function */
+foreign_t jl_declare_macro_function(term_t mname_pl, term_t fname_pl, term_t fargs_pl, term_t fexprs_pl) {
+  // handle macro name
+  atom_t m_atom;
+  if (PL_is_atomic(mname_pl)) {
+    // mname_pl is just an atom of name
+    if (!PL_get_atom(mname_pl, &m_atom))
+      PL_fail;
+  } else {
+    // mname_pl is a compound @macro
+    term_t mname_term;
+    if (!PL_is_functor(mname_pl, FUNCTOR_macro1))
+      PL_fail;
+    if (!PL_get_arg(1, mname_pl, mname_term))
+      PL_fail;
+    if (!PL_get_atom(mname_term, &m_atom))
+      PL_fail;
+  }
+  const char *macro_name_ = PL_atom_chars(m_atom);
+  JL_TRY {
+    // macro name
+    char *macro_name = (char *) calloc(1 + strlen(macro_name_) + 1, sizeof(char));
+    strcpy(macro_name, "@");
+    strcat(macro_name, macro_name_);
+
+    // macro func
+    jl_expr_t *ex = jl_exprn(jl_symbol("macrocall"), 3);
+
+    // function definition
+    jl_expr_t *func = jl_function(fname_pl, fargs_pl, fexprs_pl);
+    if (!func)
+      PL_fail;
+
+    jl_exprargset(ex, 0, jl_dot(macro_name));
+    jl_exprargset(ex, 1, func);
+    JL_GC_PUSH1(&ex);
+
+    free(macro_name); // free calloc
+#ifdef JURASSIC_DEBUG
+    printf("[DEBUG] Macro function expression:\n");
+    jl_static_show(jl_stdout_stream(), (jl_value_t *) ex);
+    jl_printf(jl_stdout_stream(), "\n");
+#endif
+    if (!jl_toplevel_eval_in(jl_main_module, (jl_value_t *) ex)) {
+      JL_GC_POP(); // ex
+      PL_fail;
+    }
+    JL_GC_POP();
+    jl_exception_clear();
+  } JL_CATCH {
+    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_throw_exception();
+    JL_GC_POP();
     PL_fail;
   }
   PL_succeed;

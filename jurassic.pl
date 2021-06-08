@@ -5,6 +5,8 @@
                      jl_send_command_str/1,
                      jl_eval/2,
                      jl_eval_str/2,
+                     jl_disp/1,
+                     jl_show/1,
                      jl_tuple_unify_str/2,
                      jl_tuple_unify/2,
                      jl_isdefined/1,
@@ -231,3 +233,9 @@ halt_hooks :-
     jl_embed_halt,
     unload_foreign_library("lib/jurassic.so"),
     writeln("Done").
+
+/* display julia variable */
+jl_disp(X) :-
+    := display(X), nl.
+jl_show(X) :-
+    := @show(X).

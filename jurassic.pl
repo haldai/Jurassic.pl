@@ -226,7 +226,6 @@ user:goal_expansion(In, Out) :-
     expand_inline_init(In, Out).
 
 :- load_foreign_library("lib/jurassic.so").
-/*
 :- at_halt(halt_hooks).
 
 halt_hooks :-
@@ -234,7 +233,6 @@ halt_hooks :-
     jl_embed_halt,
     unload_foreign_library("lib/jurassic.so"),
     writeln("Done").
-*/
 
 /* display julia variable */
 jl_disp(X) :-

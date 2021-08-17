@@ -242,7 +242,7 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
       printf("----    Argument %lu: ", i);
       char *str_arg;
       if (!PL_get_chars(arg_term, &str_arg,
-                        CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+                        CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
         return JURASSIC_FAIL;
       printf("%s.\n", str_arg);
 #endif
@@ -356,7 +356,7 @@ static int jl_tuple_ref_unify(term_t *pl_term, jl_value_t *val, size_t idx) {
     // assignment
       char *atom;
       if (!PL_get_chars(*pl_term, &atom,
-                        CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                        CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
         PL_fail;
       return jl_assign_var(atom, v);
   } else
@@ -570,7 +570,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
   char *str_expr;
   if (!PL_get_chars(expr, &str_expr,
-                    CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+                    CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     return NULL;
   printf("[DEBUG] Parse expression: %s\n", str_expr);
 #endif
@@ -627,9 +627,9 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
     char *str_arg1, *str_arg2;
     if (!PL_get_chars(arg1_term, &str_arg1,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8) ||
+                      CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8) ||
         !PL_get_chars(arg2_term, &str_arg2,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+                      CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
       return JURASSIC_FAIL;
     printf("------- %s.%s\n", str_arg1, str_arg2);
 #endif
@@ -653,8 +653,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
     }
     char *cmd_str;
     if (!PL_get_chars(cmd, &cmd_str,
-                      CVT_ATOM | CVT_STRING | CVT_EXCEPTION | BUF_DISCARDABLE |
-                      REP_UTF8)) {
+                      CVT_ATOM|CVT_STRING|BUF_STACK|CVT_EXCEPTION|REP_UTF8)) {
       printf("[ERR] Reading command string failed!\n");
       return NULL;
     }
@@ -683,7 +682,7 @@ jl_expr_t *compound_to_jl_expr(term_t expr) {
 #ifdef JURASSIC_DEBUG
     char *str_arg;
     if (!PL_get_chars(arg_term, &str_arg,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8)) {
+                      CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8)) {
       printf(" [ERR] QuoteNode: Wrong argument!\n");
       return NULL;
     }
@@ -1076,7 +1075,7 @@ int jl_set_args(jl_expr_t **ex, term_t expr, size_t arity, size_t start_jl, size
 #ifdef JURASSIC_DEBUG
     char *str_arg;
     if (!PL_get_chars(arg_term, &str_arg,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+                      CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
       return JURASSIC_FAIL;
     printf("%s.\n", str_arg);
 #endif
@@ -1117,7 +1116,7 @@ int pl_to_jl(term_t term, jl_value_t **ret, int flag_sym) {
   char *show;
   /* string, to string*/
   if (!PL_get_chars(term, &show,
-                    CVT_WRITE|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     return JURASSIC_FAIL;
   printf("[DEBUG] term = %s\n", show);
 #endif
@@ -1152,7 +1151,7 @@ int pl_to_jl(term_t term, jl_value_t **ret, int flag_sym) {
 #endif
     /* string, to string*/
     if (!PL_get_chars(term, &str,
-                      CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8)) {
+                      CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8)) {
       *ret = NULL;
 #ifdef JURASSIC_DEBUG
       printf("FAILED!\n");
@@ -1303,7 +1302,7 @@ jl_sym_t * compound_to_sym(term_t term) {
   if (fname[0] == ':' && arity < 2) {
     char *sym_str;
     if (!PL_get_chars(term, &sym_str,
-                      CVT_WRITE | CVT_EXCEPTION | BUF_DISCARDABLE | REP_UTF8))
+                      CVT_WRITE|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
       return NULL;
 
     int sym_len = strlen(sym_str);
@@ -1627,7 +1626,7 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
 foreign_t jl_eval_str(term_t jl_expr, term_t pl_ret) {
   char *expression;
   if (!PL_get_chars(jl_expr, &expression,
-                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     PL_fail;
   jl_value_t *ret;
   if (!checked_eval_string(expression, &ret))
@@ -1660,7 +1659,7 @@ foreign_t jl_tuple_unify(term_t pl_tuple, term_t jl_expr) {
 foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str) {
   char *expression;
   if (!PL_get_chars(jl_expr_str, &expression,
-                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     PL_fail;
   jl_value_t *val;
   if (!checked_eval_string(expression, &val))
@@ -1679,7 +1678,7 @@ foreign_t jl_tuple_unify_str(term_t pl_tuple, term_t jl_expr_str) {
 foreign_t jl_send_command_str(term_t jl_expr) {
   char *expression;
   if (!PL_get_chars(jl_expr, &expression,
-                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     PL_fail;
   if (!checked_jl_command(expression))
     PL_fail;
@@ -1720,7 +1719,7 @@ foreign_t jl_send_command(term_t jl_expr) {
 foreign_t jl_isdefined(term_t jl_expr) {
   char *expression;
   if (!PL_get_chars(jl_expr, &expression,
-                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     PL_fail;
   if (!jl_is_defined(expression))
     PL_fail;
@@ -1731,7 +1730,7 @@ foreign_t jl_isdefined(term_t jl_expr) {
 foreign_t jl_using(term_t term) {
   char *module;
   if (!PL_get_chars(term, &module,
-                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     PL_fail;
   char cmd[BUFFSIZE];
   sprintf(cmd, "using %s", module);
@@ -1744,7 +1743,7 @@ foreign_t jl_using(term_t term) {
 foreign_t jl_include(term_t term) {
   char *file;
   if (!PL_get_chars(term, &file,
-                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_DISCARDABLE|REP_UTF8))
+                    CVT_ATOM|CVT_STRING|CVT_EXCEPTION|BUF_STACK|REP_UTF8))
     PL_fail;
   JL_TRY {
     jl_load(jl_main_module, file);

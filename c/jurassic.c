@@ -3,6 +3,7 @@
 #include <dlfcn.h>
 
 #include "jurassic.h"
+#include <julia_gcext.h>
 
 /* atoms for julia expressions */
 static functor_t FUNCTOR_dot2; /* subfields */
@@ -49,7 +50,7 @@ static jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e) {
 
 /* Adapted from Julia source */
 static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f) {
-  jl_ptls_t ptls = jl_get_ptls_states();
+  jl_task_t *ct = jl_current_task;
   jl_value_t **args;
   JL_GC_PUSHARGS(args, 3);
   args[1] = jl_toplevel_eval_in(m, x);
@@ -64,43 +65,29 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
 #endif
   if (jl_is_module(args[1])) {
     JL_TYPECHK(getfield, symbol, args[2]);
-    args[0] = jl_eval_global_var((jl_module_t*) args[1], (jl_sym_t*) args[2]);
-  } else {
+    args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
+  }
+  else {
     args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
-    size_t last_age = ptls->world_age;
-    ptls->world_age = jl_get_world_counter();
-    JL_TRY {
-      args[0] = jl_apply(args, 3);
-      jl_exception_clear();
-    } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
-      jl_throw_exception();
-      JL_GC_POP();
-      return NULL;
-    }
-    ptls->world_age = last_age;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+    args[0] = jl_apply(args, 3);
+    ct->world_age = last_age;
   }
   JL_GC_POP();
   return args[0];
 }
 
 /* Adapted from Julia source */
-static jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) {
-  jl_expr_t *ex;
-  JL_TRY {
-    jl_array_t *ar = jl_alloc_vec_any(n);
-    JL_GC_PUSH1(&ar);
-    ex = (jl_expr_t*)jl_gc_allocobj(sizeof(jl_expr_t));
-    jl_set_typeof((jl_value_t *)ex, jl_expr_type);
-    ex->head = head;
-    ex->args = ar;
-    JL_GC_POP();
-    jl_exception_clear();
-  } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
-    jl_throw_exception();
-    return NULL;
-  }
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) {
+  jl_task_t *ct = jl_current_task;
+  jl_array_t *ar = jl_alloc_vec_any(n);
+  JL_GC_PUSH1(&ar);
+  jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc_typed(ct->ptls, sizeof(jl_expr_t),
+                                                jl_expr_type);
+  ex->head = head;
+  ex->args = ar;
+  JL_GC_POP();
   return ex;
 }
 
@@ -192,7 +179,8 @@ static int jl_access_var(const char *var, jl_value_t **ret) {
       *ret = jl_get_global(jl_main_module, jl_symbol_lookup(var));
       jl_exception_clear();
     } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_task_t *ct = jl_current_task;
+      jl_current_task->ptls->previous_exception = jl_current_exception();
       jl_throw_exception();
       *ret = NULL;
       return JURASSIC_FAIL;
@@ -209,7 +197,8 @@ static jl_value_t *jl_get_var(const char *var) {
       return jl_get_global(jl_main_module, jl_symbol_lookup(var));
       jl_exception_clear();
     } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_task_t *ct = jl_current_task;
+      jl_current_task->ptls->previous_exception = jl_current_exception();
       jl_throw_exception();
       return NULL;
     }
@@ -224,7 +213,8 @@ static int jl_assign_var(const char *var, jl_value_t *val) {
     jl_set_global(jl_main_module, jl_symbol(var), val);
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     return JURASSIC_FAIL;
   }
@@ -259,7 +249,8 @@ static int list_to_expr_args(term_t list, jl_expr_t **ex, size_t start, size_t l
       i++;
       jl_exception_clear();
     } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_task_t *ct = jl_current_task;
+      jl_current_task->ptls->previous_exception = jl_current_exception();
       jl_throw_exception();
       return JURASSIC_FAIL;
     }
@@ -298,7 +289,8 @@ static jl_value_t *jl_dot(const char *dotname) {
                             mod,
                             jl_new_struct(jl_quotenode_type, jl_symbol(++dot)));
     } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_task_t *ct = jl_current_task;
+      jl_current_task->ptls->previous_exception = jl_current_exception();
       jl_throw_exception();
       return NULL;
     }
@@ -318,7 +310,8 @@ static int jl_set_arg(jl_expr_t **ex, size_t idx, term_t term) {
     jl_gc_wb(*ex, arg); // for safety
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     return JURASSIC_FAIL;
   }
@@ -336,7 +329,8 @@ static int jl_set_jl_arg(jl_expr_t **ex, size_t idx, jl_value_t *arg) {
     jl_gc_wb(*ex, arg); // for safety
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     return JURASSIC_FAIL;
   }
@@ -558,7 +552,8 @@ int atom_to_jl(atom_t atom, jl_value_t **ret, int flag_sym) {
     }
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     *ret = NULL;
     return JURASSIC_FAIL;
   }
@@ -1239,7 +1234,8 @@ int pl_to_jl(term_t term, jl_value_t **ret, int flag_sym) {
       JL_GC_POP();
       jl_exception_clear();
     } JL_CATCH {
-      jl_get_ptls_states()->previous_exception = jl_current_exception();
+      jl_task_t *ct = jl_current_task;
+      jl_current_task->ptls->previous_exception = jl_current_exception();
       jl_throw_exception();
       *ret = NULL;
       return JURASSIC_FAIL;
@@ -1283,7 +1279,8 @@ jl_sym_t *atomic_to_sym(term_t atomic) {
     jl_exception_clear();
     return jl_symbol(a);
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     return NULL;
   }
 }
@@ -1615,7 +1612,8 @@ foreign_t jl_eval(term_t jl_expr, term_t pl_ret) {
     JL_GC_POP();
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     PL_fail;
   }
@@ -1749,7 +1747,8 @@ foreign_t jl_include(term_t term) {
     jl_load(jl_main_module, file);
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     PL_fail;
   }
@@ -1775,7 +1774,8 @@ foreign_t jl_declare_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl
     JL_GC_POP();
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     PL_fail;
   }
@@ -1832,7 +1832,8 @@ foreign_t jl_declare_macro_function(term_t mname_pl, term_t fname_pl, term_t far
     JL_GC_POP();
     jl_exception_clear();
   } JL_CATCH {
-    jl_get_ptls_states()->previous_exception = jl_current_exception();
+    jl_task_t *ct = jl_current_task;
+    jl_current_task->ptls->previous_exception = jl_current_exception();
     jl_throw_exception();
     JL_GC_POP();
     PL_fail;

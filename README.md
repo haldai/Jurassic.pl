@@ -38,6 +38,8 @@ alias pl='LD_PRELOAD=/usr/lib/libc.so.6 swipl'
 After then, just call `pl jurassic.pl` instead. (Please see this
 [issue](https://github.com/SWI-Prolog/swipl-devel/issues/894#issuecomment-942381854))
 
+**UPDATE**: Another workaround is compiling `swipl-devel` with `USE_TCMALLOC=OFF`.
+
 # Build
 
 Just run `make`.

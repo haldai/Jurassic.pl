@@ -16,12 +16,29 @@ luó jì" ⇒ (pronounce) "**侏**罗纪" ⇒ (translate) "**Jurassic**".
 
 Install SWI-Prolog and Julia, make sure `swipl-ld` and `julia` is in your `PATH`.
 
-- [SWI-Prolog](https://www.swi-prolog.org/) (tested with swipl-8.2.3 in Archlinux's community repo. swipl-devel causes problem of freeing invalid pointer when halting)
-- [Julia](https://julialang.org/) (tested with julia-1.5.4)
-  
+- [SWI-Prolog](https://www.swi-prolog.org/) (tested with swipl-devel)
+- [Julia](https://julialang.org/) (tested with julia-1.6.5)
+
 This package is only tested on Linux, not sure if it will compile on MacOS
 (maybe) or Windows (very unlikely).
 
+**Remark**: In some cases, the `julia` and `swipl` on your machine may be
+compiled with different `libm` or `libgmp`, which could cause `munmap_chunk():
+invalid pointer` error when using `Jurassic.pl`. For now, this problem is
+difficult to fix, a quick workaround is running `swipl` and `Jurassic.pl` with
+the default `libc.so`, for example:
+``` shell
+LD_PRELOAD=/usr/lib/libc.so.6 swipl jurassic.pl
+```
+To make it simpler, I usually add an alias in `~/.bashrc` (or any `rc` of your
+shell) by
+``` shell
+alias pl='LD_PRELOAD=/usr/lib/libc.so.6 swipl'
+```
+After then, just call `pl jurassic.pl` instead. (Please see this
+[issue](https://github.com/SWI-Prolog/swipl-devel/issues/894#issuecomment-942381854))
+
+**UPDATE**: Another workaround is compiling `swipl-devel` with `USE_TCMALLOC=OFF`.
 # Build
 
 Just run `make`.

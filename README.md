@@ -757,7 +757,7 @@ solve_lorenz_alt :-
     ...
 ```
 
-## TODO: Multi-dimension Arrays
+## Arrays
 Array can be initialised with function `array`, which is equal to `Array{Type,
 Dim}(Init, Size)` in Julia:
 
@@ -799,11 +799,7 @@ a = Union{Missing, Int64}[1 2; missing missing]
 true.
 ```
 
-At current stage, multiple-dimension arrays cannot be unified with Prolog
-variable, so the initialisation only stores the initialised arrays in atoms (as
-names of Julia variables).
-
-### Multi-dimension Arrays
+### Using multi-dimension Arrays
 
 Added a callable predicate `jl_use_multi_dim_arrays/0` to enable multi-dimension
 arrays, for example:

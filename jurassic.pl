@@ -12,7 +12,9 @@
                      jl_isdefined/1,
                      jl_new_array/4,
                      jl_declare_function/3,
-                     jl_declare_macro_function/4,                     
+                     jl_declare_macro_function/4,
+                     jl_type_name/2, % type name is a string
+                     jl_use_multi_dim_arrays/0,
                      ':='/1,
                      ':='/2,
                      '$='/2,
@@ -45,6 +47,32 @@
     set_prolog_flag(rational_syntax, natural),
     set_prolog_flag(prefer_rationals, true).
 
+
+jl_use_multi_dim_arrays :-
+    set_prolog_flag(jl_use_multi_dim_arrays, true),
+    jl_send_command_str("module JurassicArrays
+export stack, unstack
+
+# recursively unstack an array
+unstack(a::Array) = begin
+    return map(unstack, map(Array, collect(eachslice(a, dims=1))))
+end
+unstack(vs::Vector{T}) where T<:Real = vs
+
+# Stacking nested vectors to array
+# source: https://discourse.julialang.org/t/how-to-convert-vector-of-vectors-to-matrix/72609/23
+unsqueeze(a::Array) = begin
+    nsize = foldl(append!, size(a); init=[1])
+    return reshape(a, Tuple(nsize))
+end
+
+stack(vs::Vector{T}) where T<:Vector = begin
+    return reduce(vcat, map(unsqueeze, map(stack, vs)))
+end
+stack(vs::Vector{T}) where T<:Real = vs
+
+end").
+
 /* Unary */
 ':='(X) :-
     string(X), !,
@@ -56,12 +84,28 @@
     % assign function returns to a tuple
     compound(Y), Y = tuple(Z),
     jl_tuple_unify(tuple(Z), X), !.
+% prolog lists to julia array
+':='(Y, array(X)) :-
+    current_prolog_flag(jl_use_multi_dim_arrays, true), % only runs when using multi-dimentional arrays
+    % assign function returns to a tuple
+    ground(Y),
+    is_list(X), !,    
+    Y := 'JurassicArrays.stack'(X).
 ':='(Y, X) :-
     ground(Y), !,
     := Y = X.
 ':='(Y, str(X)) :-
     string(X), !,
     jl_eval_str(X, Y).
+% julia tensor to prolog lists
+':='(Y, X) :-
+    current_prolog_flag(jl_use_multi_dim_arrays, true), % only runs when using multi-dimentional arrays
+    % assign function returns to a tuple
+    jl_type_name(X, "Array"),
+    tuple(Size) := size(X),
+    length(Size, Dim),
+    Dim >= 2, !, % only handles matrices and tensors
+    Y := 'JurassicArrays.unstack'(X).
 ':='(Y, X) :-
     jl_eval(X, Y).
 /* Meta-programming: assign Julia variable Y with QuoteNode of X (without evaluation) */

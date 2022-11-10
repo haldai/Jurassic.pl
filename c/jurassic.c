@@ -1517,7 +1517,7 @@ int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
     return jl_unify_pl(quotedval, &qval, 1)
       && PL_unify_functor(tmp_term, FUNCTOR_quotenode1)
       && PL_unify_arg(1, tmp_term, qval);
-  } else if (jl_symbol("Rational") == val_type_name_sym) {
+  } else if (strcmp(jl_symbol_name(val_type_name_sym), "Rational") == 0) {
         // Rational number
 #ifdef JURASSIC_DEBUG
     printf("        Rational: ");
@@ -1674,6 +1674,7 @@ install_t install_jurassic(void) {
   PL_register_foreign("jl_include", 1, jl_include, 0);
   PL_register_foreign("jl_declare_function", 3, jl_declare_function, 0);
   PL_register_foreign("jl_declare_macro_function", 4, jl_declare_function, 0);
+  PL_register_foreign("jl_type_name", 2, jl_type_name, 0);
   PL_register_foreign("jl_embed_halt", 0, jl_embed_halt, 0);
 
   printf("Initialise Embedded Julia ...");
@@ -1688,6 +1689,9 @@ install_t install_jurassic(void) {
 
   /* initialisation */
   jl_init();
+
+  // jl_load(jl_main_module, "julia/arrays.jl");
+
   checked_send_command_str("println(\" Done.\")");
 }
 
@@ -1937,6 +1941,38 @@ foreign_t jl_declare_macro_function(term_t mname_pl, term_t fname_pl, term_t far
     PL_fail;
   }
   PL_succeed;
+}
+
+/* return julia term type name */
+foreign_t jl_type_name(term_t jl_expr, term_t type_name_term) {
+  jl_value_t *tmp_val;
+  if (!pl_to_jl(jl_expr, &tmp_val, FALSE) || tmp_val == NULL) {
+    if (jl_exception_occurred()) {
+      jl_call2(jl_get_function(jl_base_module, "showerror"),
+               jl_stderr_obj(),
+               jl_exception_occurred());
+      jl_printf(jl_stderr_stream(), "\n");
+    }
+    PL_fail;
+  }
+#ifdef JURASSIC_DEBUG
+  jl_static_show(jl_stdout_stream(), tmp_val);
+  jl_printf(jl_stdout_stream(), "\n");
+#endif
+  JL_GC_PUSH1(&tmp_val);
+
+  jl_sym_t *val_type_name_sym = ((jl_datatype_t*)(jl_typeof(tmp_val)))->name->name;
+  const char *type_name_str = jl_symbol_name(val_type_name_sym);
+#ifdef JURASSIC_DEBUG
+  printf("Type name: %s.\n", type_name_str);
+#endif
+  if (!PL_unify_string_chars(type_name_term, type_name_str)) {
+    JL_GC_POP();
+    PL_fail;
+  } else {
+    JL_GC_POP();
+    PL_succeed;
+  }
 }
 
 /* halt embedding julia */

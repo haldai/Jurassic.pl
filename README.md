@@ -807,6 +807,13 @@ names of Julia variables).
 More features to be added, e.g.:
 
 - Unify multi-dimension arrays with Prolog lists;
+  ```prolog
+  ?- a := sparse(zeros('Rational', 2,2)), a[1,1] := 1//2, := display(a), X := 'Array'(a*transpose(a)).
+  2×2 SparseMatrixCSC{Rational, Int64} with 1 stored entry:
+  1//2   ⋅
+   ⋅     ⋅
+  X = [[1r4, 0], [0, 0]].
+  ```
 - Multi-threading.
 
 Compile and test code in other platform, e.g.:

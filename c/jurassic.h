@@ -51,5 +51,6 @@ foreign_t jl_include(term_t term);
 foreign_t jl_declare_function(term_t fname_pl, term_t fargs_pl, term_t fexprs_pl);
 foreign_t jl_declare_macro_function(term_t mname_pl, term_t fname_pl, term_t fargs_pl, term_t fexprs_pl);
 foreign_t jl_embed_halt(void);
+foreign_t jl_type_name(term_t jl_expr, term_t type_name_term);
 
 #endif /* _JURASSIC_H */

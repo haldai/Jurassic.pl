@@ -41,6 +41,10 @@
                      op(50, fx, $)
                     ]).
 
+:-
+    set_prolog_flag(rational_syntax, natural),
+    set_prolog_flag(prefer_rationals, true).
+
 /* Unary */
 ':='(X) :-
     string(X), !,

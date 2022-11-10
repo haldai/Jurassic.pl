@@ -1200,6 +1200,64 @@ int pl_to_jl(term_t term, jl_value_t **ret, int flag_sym) {
     }
     break;
   }
+  case PL_RATIONAL: {
+#ifdef JURASSIC_DEBUG
+    printf("        Rational: ");
+#endif
+    mpq_t mpq; // use GMP rational numbers
+    mpq_init(mpq);
+
+    if (!PL_get_mpq(term, mpq)) {
+#ifdef JURASSIC_DEBUG
+      printf("FAILD!\n");
+#endif
+      *ret = NULL;
+      mpq_clear(mpq);
+      return JURASSIC_FAIL;
+    } else {
+      mpz_t numerator;
+      mpz_t denominator;
+
+      mpz_init(numerator);
+      mpz_init(denominator);
+
+      mpq_get_num(numerator, mpq);
+      mpq_get_den(denominator, mpq);
+
+      if (mpz_fits_slong_p(numerator) && mpz_fits_slong_p(denominator)) {
+        const long num = mpz_get_si(numerator);
+        const long denom = mpz_get_si(denominator);
+
+#ifdef JURASSIC_DEBUG
+        printf("        %d//%d\n", num, denom);
+#endif
+        /* convert to sexpr(:call, //, nom, denom) */
+        jl_expr_t *expr = jl_exprn(jl_symbol("call"), 3);
+        jl_exprargset(expr, 0, jl_symbol("//"));
+        jl_exprargset(expr, 1, jl_box_int64(num));
+        jl_exprargset(expr, 2, jl_box_int64(denom));
+
+        /* convert to return value */
+        JL_GC_PUSH1(&expr);
+        *ret = jl_toplevel_eval_in(jl_main_module, (jl_value_t *) expr);
+        JL_GC_POP();
+        jl_exception_clear();
+
+        // free
+        mpq_clear(mpq);
+        mpz_clear(numerator);
+        mpz_clear(denominator);
+      } else {
+        // free
+        mpq_clear(mpq);
+        mpz_clear(numerator);
+        mpz_clear(denominator);
+
+        return JURASSIC_FAIL;
+      }
+    }
+    break;
+  }
   case PL_LIST_PAIR: {
     int len = list_length(term);
 #ifdef JURASSIC_DEBUG
@@ -1330,9 +1388,15 @@ jl_sym_t * compound_to_sym(term_t term) {
 
 /* Unify julia term with prolog term */
 int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
+  jl_sym_t *val_type_name_sym = ((jl_datatype_t*)(jl_typeof(val)))->name->name;
 #ifdef JURASSIC_DEBUG
   printf("[Debug] Julia value:\n");
   jl_static_show(jl_stdout_stream(), val);
+  jl_printf(jl_stdout_stream(), "\n");
+  printf("[Debug] Julia type:\n");
+  jl_static_show(jl_stdout_stream(), jl_typeof(val));
+  jl_printf(jl_stdout_stream(), "/");
+  jl_static_show(jl_stdout_stream(), (jl_value_t *) val_type_name_sym);
   jl_printf(jl_stdout_stream(), "\n");
 #endif
   term_t tmp_term = PL_copy_term_ref(*ret);
@@ -1453,6 +1517,40 @@ int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
     return jl_unify_pl(quotedval, &qval, 1)
       && PL_unify_functor(tmp_term, FUNCTOR_quotenode1)
       && PL_unify_arg(1, tmp_term, qval);
+  } else if (jl_symbol("Rational") == val_type_name_sym) {
+        // Rational number
+#ifdef JURASSIC_DEBUG
+    printf("        Rational: ");
+    jl_static_show(jl_stdout_stream(), jl_get_nth_field(val, 0));
+    jl_printf(jl_stdout_stream(), "//");
+    jl_static_show(jl_stdout_stream(), jl_get_nth_field(val, 1));
+    jl_printf(jl_stdout_stream(), "\n");
+#endif
+    mpq_t retval;
+    mpz_t num;
+    mpz_t denom;
+
+    int64_t numerator = jl_unbox_int64(jl_get_nth_field(val, 0));
+    int64_t denominator = jl_unbox_int64(jl_get_nth_field(val, 1));
+
+    mpz_init(num);
+    mpz_init(denom);
+
+    mpz_set_si(num, numerator);
+    mpz_set_si(denom, denominator);
+
+    mpq_init(retval);
+
+    mpq_set_num(retval, num);
+    mpq_set_den(retval, denom);
+
+    int ret = PL_unify_mpq(tmp_term, retval);
+
+    mpz_clear(num);
+    mpz_clear(denom);
+    mpq_clear(retval);
+
+    return ret;
   } else if (jl_is_symbol(val)) {
 #ifdef JURASSIC_DEBUG
     printf("        Symbol (Atom): ");

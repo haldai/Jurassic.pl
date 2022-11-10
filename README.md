@@ -315,6 +315,20 @@ typeof(f([1, 2, 3])) = Array{Int64,2}
 false.
 ```
 
+### `Rational` numbers
+
+Both Prolog and Julia supports rational numbers, which are more accurate and
+useful than floating numbers in many applications. Following is an example
+converting rational numbers from both ends.
+
+``` prolog
+?- A := [100//200, 3//2, 19//20].
+A = [1r2, 3r2, 19r20].
+
+?- a := [100r200, 3r2, 19r20], := @show(a).
+a = Rational{Int64}[1//2, 3//2, 19//20]
+```
+
 ### `QuoteNode` and `Symbol`
 
 `QuoteNode` and `Symbol` are different in Julia. `QuoteNode` is an

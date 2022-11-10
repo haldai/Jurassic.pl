@@ -1,6 +1,7 @@
 #ifndef _JURASSIC_H
 #define _JURASSIC_H
 
+#include <gmp.h>
 #include <SWI-Prolog.h>
 #include <SWI-Stream.h>
 #include <julia.h>

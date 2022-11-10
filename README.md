@@ -329,6 +329,25 @@ A = [1r2, 3r2, 19r20].
 a = Rational{Int64}[1//2, 3//2, 19//20]
 ```
 
+Using rational number together with `SparseArrays`:
+
+``` prolog
+?- jl_using('SparseArrays').
+true.
+
+?- I = 1, a := spzeros('Rational', 4), a[I] := 1//2, A := 'Array'(a).
+I = 1,
+A = [1r2, 0, 0, 0].
+
+?- I = 1, a := spzeros('Rational', 4, 4), a[I,I] := 1//2, c := a*transpose(a), := display('Array'(c)).
+4×4 Matrix{Rational}:
+ 1//4  0//1  0//1  0//1
+ 0//1  0//1  0//1  0//1
+ 0//1  0//1  0//1  0//1
+ 0//1  0//1  0//1  0//1
+I = 1.
+```
+
 ### `QuoteNode` and `Symbol`
 
 `QuoteNode` and `Symbol` are different in Julia. `QuoteNode` is an

@@ -803,17 +803,54 @@ At current stage, multiple-dimension arrays cannot be unified with Prolog
 variable, so the initialisation only stores the initialised arrays in atoms (as
 names of Julia variables).
 
+### Multi-dimension Arrays
+
+Added a callable predicate `jl_use_multi_dim_arrays/0` to enable multi-dimension
+arrays, for example:
+
+``` prolog
+?- X := zeros(2,2).
+[ERR] Cannot unify list with matrices and tensors!
+false.
+
+?- jl_use_multi_dim_arrays.
+true.
+
+?- X := zeros(2,2).
+X = [[0.0, 0.0], [0.0, 0.0]].
+```
+
+After enabling multi-dimension arrays, they could be unified with Prolog's nested lists:
+
+```prolog
+?- jl_using('SparseArrays').
+true.
+
+?- a := sparse(zeros('Rational', 2,2)),
+   a[1,1] := 1//2,
+   := display(a),
+   X := 'Array'(a*transpose(a)).
+2×2 SparseMatrixCSC{Rational, Int64} with 1 stored entry:
+ 1//2   ⋅
+  ⋅     ⋅
+X = [[1r4, 0], [0, 0]].
+```
+
+Assigning a multi-dimension array with nested Prolog list via `array/1` functor:
+
+``` prolog
+?- X = [[1,2],[3,4]],
+   a := array(X), 
+   := display(a).
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+X = [[1, 2], [3, 4]].
+```
+
 # TODO
 More features to be added, e.g.:
 
-- Unify multi-dimension arrays with Prolog lists;
-  ```prolog
-  ?- a := sparse(zeros('Rational', 2,2)), a[1,1] := 1//2, := display(a), X := 'Array'(a*transpose(a)).
-  2×2 SparseMatrixCSC{Rational, Int64} with 1 stored entry:
-  1//2   ⋅
-   ⋅     ⋅
-  X = [[1r4, 0], [0, 0]].
-  ```
 - Multi-threading.
 
 Compile and test code in other platform, e.g.:
@@ -834,5 +871,5 @@ unfortunately it is deprecated and only has limited functionalities.
 # Author
 
 __Wang-Zhou Dai__ ([homepage](http://daiwz.net))<br/>
-Department of Computing<br/>
-Imperial College London
+School of Intelligence Science and Technology,<br/>
+Nanjing University, Suzhou Campus

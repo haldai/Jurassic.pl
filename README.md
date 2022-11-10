@@ -799,21 +799,36 @@ a = Union{Missing, Int64}[1 2; missing missing]
 true.
 ```
 
-### Using multi-dimension Arrays
+### Unifying Prolog list with multi-dimension arrays
 
-Added a callable predicate `jl_use_multi_dim_arrays/0` to enable multi-dimension
+Added a callable predicate `jl_unify_arrays/0` to enable multi-dimension
 arrays, for example:
 
 ``` prolog
-?- X := zeros(2,2).
+?- X := zeros(2,2,2).
 [ERR] Cannot unify list with matrices and tensors!
 false.
 
-?- jl_use_multi_dim_arrays.
+?- jl_unify_arrays.
 true.
 
-?- X := zeros(2,2).
-X = [[0.0, 0.0], [0.0, 0.0]].
+?- X := zeros(2,2,2).
+X = [[[0.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]].
+
+?- a := rand(2,2,2), 
+   := display(a[1,:,:]),
+   := display(a[2,:,:]),
+   X := a. % unification
+2×2 Matrix{Float64}:
+ 0.985283  0.552947
+ 0.545242  0.243907
+2×2 Matrix{Float64}:
+ 0.0608626  0.056837
+ 0.0653907  0.354753
+X = [[[0.98528283223325, 0.552946822654699], 
+      [0.5452419312034834, 0.24390678160983548]], 
+     [[0.060862609653857036, 0.056837009536256256], 
+      [0.0653907190522306, 0.3547534277306833]]].
 ```
 
 After enabling multi-dimension arrays, they could be unified with Prolog's nested lists:

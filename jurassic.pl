@@ -14,7 +14,7 @@
                      jl_declare_function/3,
                      jl_declare_macro_function/4,
                      jl_type_name/2, % type name is a string
-                     jl_use_multi_dim_arrays/0,
+                     jl_unify_arrays/0,
                      ':='/1,
                      ':='/2,
                      '$='/2,
@@ -48,7 +48,7 @@
     set_prolog_flag(prefer_rationals, true).
 
 
-jl_use_multi_dim_arrays :-
+jl_unify_arrays :-
     set_prolog_flag(jl_use_multi_dim_arrays, true),
     jl_send_command_str("module JurassicArrays
 export stack, unstack

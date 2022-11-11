@@ -1602,8 +1602,8 @@ int jl_unify_pl(jl_value_t *val, term_t *ret, int flag_sym) {
         return PL_unify_nil(tmp_term);
       }
     } else {
-      // TODO: Unify with Multi-dimensional arrays with list of list of list...
-      printf("[ERR] Cannot unify list with matrices and tensors!\n");
+      // Unify with Multi-dimensional arrays with nested list is implemented with Julia function
+      printf("[ERR] Cannot unify list with matrices and tensors, please enable \"jl_unify_arrays\"!\n");
       return JURASSIC_FAIL;
     }
   } else if (jl_is_tuple(val)) {
